@@ -1,0 +1,2 @@
+"""SQLite data access package."""
+
