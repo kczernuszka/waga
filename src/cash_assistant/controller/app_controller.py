@@ -128,6 +128,8 @@ class AppController:
         self._state = AppState.HISTORY
 
     def set_paid_grosze(self, paid_grosze: int) -> PaymentState:
+        if self._state is not AppState.PAYMENT:
+            raise ValueError("payment has not been started")
         if paid_grosze < 0:
             raise ValueError("paid_grosze cannot be negative")
 
@@ -148,10 +150,11 @@ class AppController:
                 missing_grosze=None,
             )
 
-        self._state = AppState.PAYMENT
         return self._payment
 
     def save_sale(self) -> Sale:
+        if self._cart.is_empty:
+            raise ValueError("cannot save sale from empty cart")
         if self._payment is None:
             raise ValueError("paid_grosze is required before saving sale")
         if self._payment.missing_grosze is not None:

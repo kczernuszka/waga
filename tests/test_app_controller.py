@@ -136,6 +136,7 @@ def test_prepare_view_state_for_gui(
 ) -> None:
     scale.set_weight_grams(1_500)
     item = controller.add_weighted_product(weighted_product())
+    controller.start_payment()
     controller.set_paid_grosze(2_000)
 
     assert controller.prepare_view_state() == ViewState(
@@ -156,6 +157,7 @@ def test_set_paid_grosze_calculates_change_when_payment_is_enough(
 ) -> None:
     scale.set_weight_grams(1_500)
     controller.add_weighted_product(weighted_product())
+    controller.start_payment()
 
     payment = controller.set_paid_grosze(2_000)
 
@@ -170,6 +172,7 @@ def test_set_paid_grosze_calculates_missing_amount_when_payment_is_too_low(
 ) -> None:
     scale.set_weight_grams(1_500)
     controller.add_weighted_product(weighted_product())
+    controller.start_payment()
 
     payment = controller.set_paid_grosze(1_000)
 
@@ -178,9 +181,61 @@ def test_set_paid_grosze_calculates_missing_amount_when_payment_is_too_low(
     assert payment.missing_grosze == 50
 
 
-def test_set_paid_grosze_rejects_negative_payment(controller: AppController) -> None:
+def test_set_paid_grosze_rejects_negative_payment(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    controller.add_weighted_product(weighted_product())
+    controller.start_payment()
+
     with pytest.raises(ValueError):
         controller.set_paid_grosze(-1)
+
+
+def test_start_payment_empty_cart_raises(controller: AppController) -> None:
+    with pytest.raises(ValueError):
+        controller.start_payment()
+
+
+def test_set_paid_without_start_payment_raises(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    controller.add_weighted_product(weighted_product())
+
+    with pytest.raises(ValueError):
+        controller.set_paid_grosze(2_000)
+
+
+def test_start_payment_with_non_empty_cart_enters_payment_mode(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    controller.add_weighted_product(weighted_product())
+
+    controller.start_payment()
+
+    assert controller.prepare_view_state().app_state is AppState.PAYMENT
+
+
+def test_set_paid_after_start_payment_updates_state(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    controller.add_weighted_product(weighted_product())
+    controller.start_payment()
+
+    payment = controller.set_paid_grosze(2_000)
+
+    view_state = controller.prepare_view_state()
+    assert view_state.app_state is AppState.PAYMENT
+    assert view_state.paid_grosze == payment.paid_grosze
+    assert view_state.change_grosze == payment.change_grosze
+    assert view_state.missing_grosze == payment.missing_grosze
 
 
 def test_save_sale_uses_sale_repository_and_starts_new_cart(
@@ -191,6 +246,7 @@ def test_save_sale_uses_sale_repository_and_starts_new_cart(
     scale.set_weight_grams(1_500)
     controller.add_weighted_product(weighted_product())
     controller.add_piece_product(piece_product(), quantity=3)
+    controller.start_payment()
     controller.set_paid_grosze(2_000)
 
     saved_sale = controller.save_sale()
@@ -241,6 +297,7 @@ def test_save_sale_rejects_missing_payment(
 ) -> None:
     scale.set_weight_grams(1_500)
     controller.add_weighted_product(weighted_product())
+    controller.start_payment()
     controller.set_paid_grosze(1_000)
 
     with pytest.raises(ValueError):
@@ -303,11 +360,13 @@ def test_history_methods_use_sale_repository(
 ) -> None:
     scale.set_weight_grams(1_500)
     controller.add_weighted_product(weighted_product())
+    controller.start_payment()
     controller.set_paid_grosze(2_000)
     first_sale = controller.save_sale()
 
     scale.set_weight_grams(2_000)
     controller.add_weighted_product(weighted_product())
+    controller.start_payment()
     controller.set_paid_grosze(2_000)
     second_sale = controller.save_sale()
 
