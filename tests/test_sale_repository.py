@@ -127,3 +127,35 @@ def test_save_sale_rejects_sale_without_items(
 
     with pytest.raises(ValueError):
         repository.save_sale(sale)
+
+
+def test_save_sale_rolls_back_sale_when_saving_items_fails(
+    connection: sqlite3.Connection,
+) -> None:
+    connection.execute("DROP TABLE sale_items")
+    connection.execute(
+        """
+        CREATE TABLE sale_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            product_id INTEGER,
+            product_name_snapshot TEXT NOT NULL,
+            unit_type_snapshot TEXT NOT NULL,
+            unit_price_grosze_snapshot INTEGER NOT NULL,
+            quantity_value INTEGER NOT NULL CHECK (quantity_value < 0),
+            line_total_grosze INTEGER NOT NULL,
+            FOREIGN KEY (sale_id) REFERENCES sales(id)
+        )
+        """
+    )
+    connection.commit()
+    repository = SaleRepository(connection)
+    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=UTC))
+
+    with pytest.raises(sqlite3.IntegrityError):
+        repository.save_sale(sale)
+
+    sales_count = connection.execute("SELECT COUNT(*) FROM sales").fetchone()[0]
+    sale_items_count = connection.execute("SELECT COUNT(*) FROM sale_items").fetchone()[0]
+    assert sales_count == 0
+    assert sale_items_count == 0
