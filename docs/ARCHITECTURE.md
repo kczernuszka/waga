@@ -80,9 +80,11 @@ src/
       __init__.py
       app_controller.py
       keyboard_controller.py
+      view_state.py
 
     ui/
       __init__.py
+      formatters.py
       main_window.py
       sales_screen.py
       settings_screen.py
@@ -98,17 +100,24 @@ money.py
 
 Odpowiedzialność:
 
-- formatowanie pieniędzy
-- parsowanie pieniędzy
+- czysta logika obliczeń na pieniądzach reprezentowanych jako `int` w groszach
+- liczenie wartości pozycji ważonej
+- liczenie wartości pozycji na sztuki
 - zaokrąglanie końcowej kwoty
 - liczenie reszty
 
 Wymagane funkcje:
 
-def format_money(grosze: int) -> str:
+def calculate_weighted_line_total_grosze(
+    unit_price_grosze: int,
+    weight_grams: int,
+) -> int:
     ...
 
-def parse_money(text: str) -> int:
+def calculate_piece_line_total_grosze(
+    unit_price_grosze: int,
+    quantity: int,
+) -> int:
     ...
 
 def round_to_nearest_50_grosze(amount_grosze: int) -> int:
@@ -120,8 +129,15 @@ def calculate_change(paid_grosze: int, total_grosze: int) -> int:
 Zasady:
 
 - wejściem i wyjściem są liczby całkowite w groszach
+- waga jest reprezentowana jako `int` w gramach
 - nie używać float
+- nie formatować tekstów dla GUI
+- nie parsować tekstów wpisywanych przez użytkownika
 - błędne dane wejściowe powinny zgłaszać ValueError
+
+Formatowanie pieniędzy i ilości do tekstów widocznych w GUI nie należy do `core/money.py`.
+Teksty dla GUI są przygotowywane poza `core`, w warstwie prezentacji/kontrolera oraz pomocniczo
+w `ui/formatters.py`.
 
 product.py
 
@@ -315,6 +331,22 @@ Moduł controller
 
 controller odpowiada za logikę aplikacyjną i przejścia między stanami.
 
+controller przygotowuje dane dla GUI w postaci prostych DTO/ViewState.
+GUI nie powinno samodzielnie składać danych domenowych ani formatować jednostek na podstawie `UnitType`.
+Przykładowe DTO:
+
+- `ProductViewState`
+- `CartItemViewState`
+- `ViewState`
+
+Produkty przekazywane do GUI powinny zawierać gotowe pola tekstowe:
+
+- `product_id`
+- `name`
+- `price_text`
+- `unit_text`
+- `button_text`
+
 Stany aplikacji
 
 Minimalne stany:
@@ -361,6 +393,36 @@ key press    -> druga skopiowana ścieżka logiki
 ## Moduł ui
 
 ui odpowiada za PySide6.
+
+ui odpowiada za wyświetlanie i zdarzenia użytkownika.
+Nie powinno importować `core/` ani znać modeli domenowych takich jak `Product`, `CartItem`,
+`Sale` czy `UnitType`.
+
+Ekrany GUI powinny dostawać gotowy `ViewState` z `controller/` i emitować komendy do kontrolera.
+
+formatters.py
+
+Odpowiedzialność:
+
+- proste formatowanie prymitywów do tekstów UI, np. groszy, gramów, ilości sztuk
+- brak zależności od `core/`
+
+Przykłady:
+
+def format_money(grosze: int) -> str:
+    ...
+
+def format_weight_grams(weight_grams: int) -> str:
+    ...
+
+def format_piece_quantity(quantity: int) -> str:
+    ...
+
+def format_unit_price(price_grosze: int, unit_text: str) -> str:
+    ...
+
+Formatowanie wymagające znajomości `UnitType` powinno być wykonane w warstwie
+controller/presentation, np. podczas budowania `ProductViewState` lub `CartItemViewState`.
 
 main_window.py
 
