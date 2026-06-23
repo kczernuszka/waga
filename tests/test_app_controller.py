@@ -103,6 +103,61 @@ def test_add_piece_product_uses_given_quantity(controller: AppController) -> Non
     assert controller.cart.items == (item,)
 
 
+def test_select_product_by_id_adds_weighted_product_for_gui(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    product = controller.create_product(
+        Product(
+            id=None,
+            name="Gruszki",
+            unit_type=UnitType.KG,
+            price_grosze=899,
+        )
+    )
+    assert product.id is not None
+    scale.set_weight_grams(1_000)
+
+    item = controller.select_product_by_id(product.id)
+
+    assert item == CartItem(
+        product_id=product.id,
+        product_name_snapshot="Gruszki",
+        unit_type_snapshot=UnitType.KG,
+        unit_price_grosze_snapshot=899,
+        quantity_value=1_000,
+        line_total_grosze=899,
+    )
+    assert controller.prepare_view_state().app_state is AppState.CART_REVIEW
+
+
+def test_select_product_by_id_enters_quantity_for_piece_product(
+    controller: AppController,
+) -> None:
+    product = controller.create_product(
+        Product(
+            id=None,
+            name="Bulka",
+            unit_type=UnitType.PIECE,
+            price_grosze=120,
+        )
+    )
+    assert product.id is not None
+
+    result = controller.select_product_by_id(product.id)
+    item = controller.add_selected_piece_product(quantity=3)
+
+    assert result is None
+    assert item == CartItem(
+        product_id=product.id,
+        product_name_snapshot="Bulka",
+        unit_type_snapshot=UnitType.PIECE,
+        unit_price_grosze_snapshot=120,
+        quantity_value=3,
+        line_total_grosze=360,
+    )
+
+
 def test_remove_last_item_removes_most_recent_item(
     controller: AppController,
     scale: MockScale,
@@ -341,6 +396,8 @@ def test_product_methods_use_product_repository(controller: AppController) -> No
 
     assert controller.list_all_products() == [first, second]
     assert controller.list_active_products() == [first, second]
+    assert first.id is not None
+    assert second.id is not None
     assert controller.prepare_view_state().products == (
         ProductViewState(
             product_id=first.id,
@@ -358,7 +415,6 @@ def test_product_methods_use_product_repository(controller: AppController) -> No
         ),
     )
 
-    assert second.id is not None
     updated_second = controller.update_product(
         Product(
             id=second.id,

@@ -10,6 +10,7 @@ from cash_assistant.controller.keyboard_controller import Command, KeyboardContr
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.data.database import connect, initialize_schema
+from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
 from cash_assistant.hardware.mock_scale import MockScale
 
@@ -38,6 +39,7 @@ def app_controller(
 ) -> AppController:
     return AppController(
         scale=scale,
+        product_repository=ProductRepository(connection),
         sale_repository=SaleRepository(connection),
         clock=lambda: CREATED_AT,
     )
@@ -45,10 +47,9 @@ def app_controller(
 
 @pytest.fixture
 def keyboard_controller(app_controller: AppController) -> KeyboardController:
-    return KeyboardController(
-        app_controller=app_controller,
-        products=(weighted_product(), piece_product()),
-    )
+    app_controller.create_product(weighted_product())
+    app_controller.create_product(piece_product())
+    return KeyboardController(app_controller=app_controller)
 
 
 def weighted_product() -> Product:
@@ -113,16 +114,88 @@ def test_select_piece_product_enters_quantity_then_confirm_adds_item(
     assert app_controller.prepare_view_state().app_state is AppState.CART_REVIEW
 
 
-def test_select_product_command_accepts_product_payload(
+def test_select_product_command_accepts_product_id_payload(
     app_controller: AppController,
     keyboard_controller: KeyboardController,
     scale: MockScale,
 ) -> None:
     scale.set_weight_grams(2_000)
 
-    keyboard_controller.handle(Command.SELECT_PRODUCT, weighted_product())
+    keyboard_controller.handle(Command.SELECT_PRODUCT, 1)
 
     assert app_controller.cart.technical_total_grosze == 1_398
+
+
+def test_select_product_command_rejects_non_id_payload(
+    keyboard_controller: KeyboardController,
+) -> None:
+    with pytest.raises(ValueError):
+        keyboard_controller.handle(Command.SELECT_PRODUCT, "1")
+
+
+def test_keyboard_shortcut_maps_to_correct_product_id_from_view_state(
+    app_controller: AppController,
+    scale: MockScale,
+) -> None:
+    app_controller.create_product(
+        Product(
+            id=None,
+            name="Apple",
+            unit_type=UnitType.KG,
+            price_grosze=699,
+            sort_order=20,
+        )
+    )
+    first_slot_product = app_controller.create_product(
+        Product(
+            id=None,
+            name="Gruszki",
+            unit_type=UnitType.KG,
+            price_grosze=899,
+            sort_order=10,
+        )
+    )
+    keyboard_controller = KeyboardController(app_controller=app_controller)
+    scale.set_weight_grams(1_000)
+
+    result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+
+    assert isinstance(result, CartItem)
+    assert result.product_id == first_slot_product.id
+    assert result.product_name_snapshot == "Gruszki"
+
+
+def test_shortcut_number_is_not_treated_as_product_id(
+    app_controller: AppController,
+    scale: MockScale,
+) -> None:
+    product_with_id_1 = app_controller.create_product(
+        Product(
+            id=None,
+            name="Apple",
+            unit_type=UnitType.KG,
+            price_grosze=699,
+            sort_order=20,
+        )
+    )
+    first_slot_product = app_controller.create_product(
+        Product(
+            id=None,
+            name="Gruszki",
+            unit_type=UnitType.KG,
+            price_grosze=899,
+            sort_order=10,
+        )
+    )
+    keyboard_controller = KeyboardController(app_controller=app_controller)
+    scale.set_weight_grams(1_000)
+
+    result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+
+    assert isinstance(result, CartItem)
+    assert product_with_id_1.id == 1
+    assert first_slot_product.id == 2
+    assert result.product_id == first_slot_product.id
 
 
 def test_start_payment_and_digits_calculate_change(

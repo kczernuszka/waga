@@ -5,8 +5,7 @@ from enum import Enum
 from typing import Any
 
 from cash_assistant.controller.app_controller import AppController
-from cash_assistant.controller.view_state import AppState
-from cash_assistant.core.product import Product, UnitType
+from cash_assistant.controller.view_state import AppState, ProductViewState
 
 
 class Command(Enum):
@@ -28,22 +27,23 @@ class KeyboardController:
     def __init__(
         self,
         app_controller: AppController,
-        products: Sequence[Product] = (),
+        products: Sequence[ProductViewState] = (),
     ) -> None:
         self._app_controller = app_controller
-        self._products = tuple(products)
-        self._selected_piece_product: Product | None = None
+        self._products: tuple[ProductViewState, ...] | None = (
+            tuple(products) if products else None
+        )
         self._quantity_buffer = ""
         self._payment_buffer = ""
 
-    def set_products(self, products: Sequence[Product]) -> None:
+    def set_products(self, products: Sequence[ProductViewState]) -> None:
         self._products = tuple(products)
 
     def handle(self, command: Command, payload: object | None = None) -> Any:
         result: Any = None
         match command:
             case Command.SELECT_PRODUCT:
-                result = self._select_product(self._product_from_payload(payload))
+                result = self._select_product(self._product_id_from_payload(payload))
             case Command.DIGIT_TYPED:
                 result = self._handle_digit(payload)
             case Command.DECIMAL_SEPARATOR_TYPED:
@@ -86,7 +86,7 @@ class KeyboardController:
             self._payment_buffer += digit
             return self._app_controller.set_paid_grosze(self._payment_buffer_to_grosze())
 
-        return self._select_product(self._product_by_shortcut(digit))
+        return self._select_product(self._product_id_by_shortcut(digit))
 
     def _handle_decimal_separator(self) -> None:
         app_state = self._app_controller.prepare_view_state().app_state
@@ -103,14 +103,11 @@ class KeyboardController:
         app_state = self._app_controller.prepare_view_state().app_state
 
         if app_state is AppState.ENTERING_QUANTITY:
-            if self._selected_piece_product is None:
-                raise ValueError("no piece product selected")
             if self._quantity_buffer == "":
                 raise ValueError("quantity is required")
             quantity = int(self._quantity_buffer)
-            product = self._selected_piece_product
             self._clear_input_buffers()
-            return self._app_controller.add_piece_product(product, quantity=quantity)
+            return self._app_controller.add_selected_piece_product(quantity=quantity)
 
         if app_state is AppState.PAYMENT:
             return self._app_controller.save_sale()
@@ -133,32 +130,24 @@ class KeyboardController:
             paid_grosze = 0 if self._payment_buffer == "" else self._payment_buffer_to_grosze()
             self._app_controller.set_paid_grosze(paid_grosze)
 
-    def _select_product(self, product: Product) -> Any:
+    def _select_product(self, product_id: int) -> Any:
         self._clear_input_buffers()
+        return self._app_controller.select_product_by_id(product_id)
 
-        if product.unit_type is UnitType.KG:
-            return self._app_controller.add_weighted_product(product)
-
-        if product.unit_type is UnitType.PIECE:
-            self._selected_piece_product = product
-            self._app_controller.start_quantity_entry()
-            return None
-
-    def _product_from_payload(self, payload: object | None) -> Product:
-        if isinstance(payload, Product):
+    def _product_id_from_payload(self, payload: object | None) -> int:
+        if type(payload) is int:
             return payload
-        if isinstance(payload, int | str):
-            return self._product_by_shortcut(str(payload))
-        raise ValueError("SELECT_PRODUCT requires a Product or product shortcut")
+        raise ValueError("SELECT_PRODUCT requires a product_id")
 
-    def _product_by_shortcut(self, shortcut: str) -> Product:
+    def _product_id_by_shortcut(self, shortcut: str) -> int:
         if not shortcut.isdecimal() or len(shortcut) != 1:
             raise ValueError("product shortcut must be a single digit")
 
         index = int(shortcut) - 1
-        if index < 0 or index >= len(self._products):
+        products = self._products or self._app_controller.prepare_view_state().products
+        if index < 0 or index >= len(products):
             raise ValueError(f"product shortcut {shortcut} is not assigned")
-        return self._products[index]
+        return products[index].product_id
 
     def _digit_from_payload(self, payload: object | None) -> str:
         if isinstance(payload, int):
@@ -182,6 +171,5 @@ class KeyboardController:
         return zloty * 100 + grosze
 
     def _clear_input_buffers(self) -> None:
-        self._selected_piece_product = None
         self._quantity_buffer = ""
         self._payment_buffer = ""

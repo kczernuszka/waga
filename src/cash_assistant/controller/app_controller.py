@@ -12,7 +12,7 @@ from cash_assistant.controller.view_state import (
 )
 from cash_assistant.core.cart import Cart, CartItem
 from cash_assistant.core.money import calculate_change
-from cash_assistant.core.product import Product
+from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import Sale
 from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
@@ -41,6 +41,7 @@ class AppController:
         self._cart = Cart()
         self._state = AppState.PRODUCT_SELECTION
         self._payment: PaymentState | None = None
+        self._selected_piece_product_id: int | None = None
 
     @property
     def cart(self) -> Cart:
@@ -65,6 +66,7 @@ class AppController:
         self._require_product_repository().deactivate_product(product_id)
 
     def add_weighted_product(self, product: Product) -> CartItem:
+        self._clear_selected_piece_product()
         item = self._cart.add_weighted_product(
             product,
             weight_grams=self._scale.get_weight_grams(),
@@ -74,20 +76,46 @@ class AppController:
         return item
 
     def add_piece_product(self, product: Product, quantity: int) -> CartItem:
+        self._clear_selected_piece_product()
         item = self._cart.add_piece_product(product, quantity=quantity)
         self._reset_payment()
         self._state = AppState.CART_REVIEW
         return item
 
+    def select_product_by_id(self, product_id: int) -> CartItem | None:
+        product = self._require_active_product(product_id)
+
+        if product.unit_type is UnitType.KG:
+            return self.add_weighted_product(product)
+
+        self._reset_payment()
+        self._selected_piece_product_id = product_id
+        self._state = AppState.ENTERING_QUANTITY
+        return None
+
+    def add_piece_product_by_id(self, product_id: int, quantity: int) -> CartItem:
+        product = self._require_active_product(product_id)
+        return self.add_piece_product(product, quantity=quantity)
+
+    def add_selected_piece_product(self, quantity: int) -> CartItem:
+        if self._selected_piece_product_id is None:
+            raise ValueError("no piece product selected")
+        return self.add_piece_product_by_id(
+            self._selected_piece_product_id,
+            quantity=quantity,
+        )
+
     def remove_last_item(self) -> CartItem | None:
         item = self._cart.remove_last_item()
         self._reset_payment()
+        self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
         return item
 
     def clear_cart(self) -> None:
         self._cart.clear()
         self._reset_payment()
+        self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION
 
     def start_quantity_entry(self) -> None:
@@ -98,10 +126,12 @@ class AppController:
         if self._cart.is_empty:
             raise ValueError("cannot start payment with empty cart")
         self._reset_payment()
+        self._clear_selected_piece_product()
         self._state = AppState.PAYMENT
 
     def cancel_current_operation(self) -> None:
         self._reset_payment()
+        self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
 
     def open_settings(self) -> None:
@@ -151,6 +181,7 @@ class AppController:
         saved_sale = self._sale_repository.save_sale(sale)
         self._cart = Cart()
         self._reset_payment()
+        self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION
         return saved_sale
 
@@ -188,10 +219,21 @@ class AppController:
     def _reset_payment(self) -> None:
         self._payment = None
 
+    def _clear_selected_piece_product(self) -> None:
+        self._selected_piece_product_id = None
+
     def _require_product_repository(self) -> ProductRepository:
         if self._product_repository is None:
             raise ValueError("product repository is required for product operations")
         return self._product_repository
+
+    def _require_active_product(self, product_id: int) -> Product:
+        product = self._require_product_repository().get_product(product_id)
+        if product is None:
+            raise ValueError(f"product with id {product_id} does not exist")
+        if not product.active:
+            raise ValueError(f"product with id {product_id} is inactive")
+        return product
 
     def _list_active_products_if_repository_exists(self) -> list[Product]:
         if self._product_repository is None:

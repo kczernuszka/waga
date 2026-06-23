@@ -26,7 +26,7 @@ class PaymentState:
 
 @dataclass(frozen=True)
 class ProductViewState:
-    product_id: int | None
+    product_id: int
     name: str
     price_text: str
     unit_text: str
@@ -61,6 +61,9 @@ class ViewState:
 
 
 def build_product_view_state(product: Product) -> ProductViewState:
+    if product.id is None:
+        raise ValueError("product id is required for product view state")
+
     unit_text = _format_unit_type(product.unit_type)
     price_text = _format_unit_price(product.price_grosze, unit_text)
     return ProductViewState(
