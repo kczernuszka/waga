@@ -10,6 +10,7 @@ from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import SaleItem
 from cash_assistant.data.database import connect, initialize_schema
+from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
 from cash_assistant.hardware.mock_scale import MockScale
 
@@ -39,6 +40,7 @@ def controller(
 ) -> AppController:
     return AppController(
         scale=scale,
+        product_repository=ProductRepository(connection),
         sale_repository=SaleRepository(connection),
         clock=lambda: CREATED_AT,
     )
@@ -243,3 +245,75 @@ def test_save_sale_rejects_missing_payment(
 
     with pytest.raises(ValueError):
         controller.save_sale()
+
+
+def test_product_methods_use_product_repository(controller: AppController) -> None:
+    second = controller.create_product(
+        Product(
+            id=None,
+            name="Jabłka",
+            unit_type=UnitType.KG,
+            price_grosze=699,
+            sort_order=20,
+        )
+    )
+    first = controller.create_product(
+        Product(
+            id=None,
+            name="Bułka",
+            unit_type=UnitType.PIECE,
+            price_grosze=120,
+            sort_order=10,
+        )
+    )
+
+    assert controller.list_all_products() == [first, second]
+    assert controller.list_active_products() == [first, second]
+
+    assert second.id is not None
+    updated_second = controller.update_product(
+        Product(
+            id=second.id,
+            name="Jabłka premium",
+            unit_type=UnitType.KG,
+            price_grosze=799,
+            active=True,
+            sort_order=5,
+        )
+    )
+
+    assert controller.get_product(second.id) == updated_second
+
+    controller.deactivate_product(second.id)
+
+    assert controller.list_active_products() == [first]
+    assert controller.get_product(second.id) == Product(
+        id=second.id,
+        name="Jabłka premium",
+        unit_type=UnitType.KG,
+        price_grosze=799,
+        active=False,
+        sort_order=5,
+    )
+
+
+def test_history_methods_use_sale_repository(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    controller.add_weighted_product(weighted_product())
+    controller.set_paid_grosze(2_000)
+    first_sale = controller.save_sale()
+
+    scale.set_weight_grams(2_000)
+    controller.add_weighted_product(weighted_product())
+    controller.set_paid_grosze(2_000)
+    second_sale = controller.save_sale()
+
+    assert controller.list_recent_sales(limit=1) == [second_sale]
+    assert controller.list_recent_sales(limit=2) == [second_sale, first_sale]
+
+    assert first_sale.id is not None
+    assert controller.read_sale(first_sale.id) == first_sale
+    assert controller.read_sale(404) is None

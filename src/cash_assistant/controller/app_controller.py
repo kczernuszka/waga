@@ -9,6 +9,7 @@ from cash_assistant.core.cart import Cart, CartItem
 from cash_assistant.core.money import calculate_change
 from cash_assistant.core.product import Product
 from cash_assistant.core.sale import Sale
+from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
 from cash_assistant.hardware.scale import Scale
 
@@ -47,9 +48,11 @@ class AppController:
         self,
         scale: Scale,
         sale_repository: SaleRepository,
+        product_repository: ProductRepository | None = None,
         clock: Callable[[], datetime] | None = None,
     ) -> None:
         self._scale = scale
+        self._product_repository = product_repository
         self._sale_repository = sale_repository
         self._clock = clock or _utc_now
         self._cart = Cart()
@@ -59,6 +62,24 @@ class AppController:
     @property
     def cart(self) -> Cart:
         return self._cart
+
+    def list_active_products(self) -> list[Product]:
+        return self._require_product_repository().list_active_products()
+
+    def list_all_products(self) -> list[Product]:
+        return self._require_product_repository().list_all_products()
+
+    def get_product(self, product_id: int) -> Product | None:
+        return self._require_product_repository().get_product(product_id)
+
+    def create_product(self, product: Product) -> Product:
+        return self._require_product_repository().create_product(product)
+
+    def update_product(self, product: Product) -> Product:
+        return self._require_product_repository().update_product(product)
+
+    def deactivate_product(self, product_id: int) -> None:
+        self._require_product_repository().deactivate_product(product_id)
 
     def add_weighted_product(self, product: Product) -> CartItem:
         item = self._cart.add_weighted_product(
@@ -147,6 +168,12 @@ class AppController:
         self._state = AppState.PRODUCT_SELECTION
         return saved_sale
 
+    def list_recent_sales(self, limit: int = 20) -> list[Sale]:
+        return self._sale_repository.list_recent_sales(limit=limit)
+
+    def read_sale(self, sale_id: int) -> Sale | None:
+        return self._sale_repository.read_sale(sale_id)
+
     def prepare_view_state(self) -> ViewState:
         return ViewState(
             app_state=self._state,
@@ -161,6 +188,11 @@ class AppController:
 
     def _reset_payment(self) -> None:
         self._payment = None
+
+    def _require_product_repository(self) -> ProductRepository:
+        if self._product_repository is None:
+            raise ValueError("product repository is required for product operations")
+        return self._product_repository
 
 
 def _utc_now() -> datetime:
