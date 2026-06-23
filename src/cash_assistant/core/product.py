@@ -18,3 +18,6 @@ class Product:
     active: bool = True
     sort_order: int = 0
 
+    def __post_init__(self) -> None:
+        if self.price_grosze < 0:
+            raise ValueError("price_grosze cannot be negative")
