@@ -86,6 +86,26 @@ class AppController:
         self._reset_payment()
         self._state = AppState.PRODUCT_SELECTION
 
+    def start_quantity_entry(self) -> None:
+        self._reset_payment()
+        self._state = AppState.ENTERING_QUANTITY
+
+    def start_payment(self) -> None:
+        if self._cart.is_empty:
+            raise ValueError("cannot start payment with empty cart")
+        self._reset_payment()
+        self._state = AppState.PAYMENT
+
+    def cancel_current_operation(self) -> None:
+        self._reset_payment()
+        self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
+
+    def open_settings(self) -> None:
+        self._state = AppState.SETTINGS
+
+    def open_history(self) -> None:
+        self._state = AppState.HISTORY
+
     def set_paid_grosze(self, paid_grosze: int) -> PaymentState:
         if paid_grosze < 0:
             raise ValueError("paid_grosze cannot be negative")
