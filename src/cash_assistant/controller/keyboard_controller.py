@@ -4,7 +4,8 @@ from collections.abc import Sequence
 from enum import Enum
 from typing import Any
 
-from cash_assistant.controller.app_controller import AppController, AppState
+from cash_assistant.controller.app_controller import AppController
+from cash_assistant.controller.view_state import AppState
 from cash_assistant.core.product import Product, UnitType
 
 

@@ -1,12 +1,9 @@
 import pytest
 
-from cash_assistant.core.product import UnitType
 from cash_assistant.ui.formatters import (
     format_money,
     format_piece_quantity,
-    format_quantity,
     format_unit_price,
-    format_unit_type,
     format_weight_grams,
 )
 
@@ -63,16 +60,11 @@ def test_format_piece_quantity_rejects_negative_quantity() -> None:
         format_piece_quantity(-1)
 
 
-def test_format_unit_type() -> None:
-    assert format_unit_type(UnitType.KG) == "kg"
-    assert format_unit_type(UnitType.PIECE) == "szt."
+def test_format_unit_price_uses_unit_text() -> None:
+    assert format_unit_price(699, "kg") == "6,99 zł/kg"
+    assert format_unit_price(120, "szt.") == "1,20 zł/szt."
 
 
-def test_format_quantity_uses_unit_type() -> None:
-    assert format_quantity(UnitType.KG, 1_500) == "1,50 kg"
-    assert format_quantity(UnitType.PIECE, 3) == "3 szt."
-
-
-def test_format_unit_price_uses_unit_suffix() -> None:
-    assert format_unit_price(699, UnitType.KG) == "6,99 zł/kg"
-    assert format_unit_price(120, UnitType.PIECE) == "1,20 zł/szt."
+def test_format_unit_price_rejects_empty_unit_text() -> None:
+    with pytest.raises(ValueError):
+        format_unit_price(699, "")

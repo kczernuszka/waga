@@ -1,10 +1,15 @@
 """Main application controller."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
 
+from cash_assistant.controller.view_state import (
+    AppState,
+    PaymentState,
+    ViewState,
+    build_cart_item_view_state,
+    build_product_view_state,
+)
 from cash_assistant.core.cart import Cart, CartItem
 from cash_assistant.core.money import calculate_change
 from cash_assistant.core.product import Product
@@ -13,34 +18,12 @@ from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
 from cash_assistant.hardware.scale import Scale
 
-
-class AppState(Enum):
-    PRODUCT_SELECTION = "product_selection"
-    ENTERING_QUANTITY = "entering_quantity"
-    READING_WEIGHT = "reading_weight"
-    CART_REVIEW = "cart_review"
-    PAYMENT = "payment"
-    SETTINGS = "settings"
-    HISTORY = "history"
-
-
-@dataclass(frozen=True)
-class PaymentState:
-    paid_grosze: int
-    change_grosze: int | None
-    missing_grosze: int | None
-
-
-@dataclass(frozen=True)
-class ViewState:
-    app_state: AppState
-    cart_items: tuple[CartItem, ...]
-    technical_total_grosze: int
-    rounded_total_grosze: int
-    paid_grosze: int | None
-    change_grosze: int | None
-    missing_grosze: int | None
-    is_cart_empty: bool
+__all__ = [
+    "AppController",
+    "AppState",
+    "PaymentState",
+    "ViewState",
+]
 
 
 class AppController:
@@ -178,14 +161,27 @@ class AppController:
         return self._sale_repository.read_sale(sale_id)
 
     def prepare_view_state(self) -> ViewState:
+        paid_grosze = None if self._payment is None else self._payment.paid_grosze
+        change_grosze = None if self._payment is None else self._payment.change_grosze
+        missing_grosze = None if self._payment is None else self._payment.missing_grosze
+
         return ViewState(
             app_state=self._state,
-            cart_items=self._cart.items,
+            products=tuple(
+                build_product_view_state(product)
+                for product in self._list_active_products_if_repository_exists()
+            ),
+            cart_items=tuple(build_cart_item_view_state(item) for item in self._cart.items),
             technical_total_grosze=self._cart.technical_total_grosze,
+            technical_total_text=_format_money(self._cart.technical_total_grosze),
             rounded_total_grosze=self._cart.rounded_total_grosze,
-            paid_grosze=None if self._payment is None else self._payment.paid_grosze,
-            change_grosze=None if self._payment is None else self._payment.change_grosze,
-            missing_grosze=None if self._payment is None else self._payment.missing_grosze,
+            rounded_total_text=_format_money(self._cart.rounded_total_grosze),
+            paid_grosze=paid_grosze,
+            paid_text=None if paid_grosze is None else _format_money(paid_grosze),
+            change_grosze=change_grosze,
+            change_text=None if change_grosze is None else _format_money(change_grosze),
+            missing_grosze=missing_grosze,
+            missing_text=None if missing_grosze is None else _format_money(missing_grosze),
             is_cart_empty=self._cart.is_empty,
         )
 
@@ -197,6 +193,19 @@ class AppController:
             raise ValueError("product repository is required for product operations")
         return self._product_repository
 
+    def _list_active_products_if_repository_exists(self) -> list[Product]:
+        if self._product_repository is None:
+            return []
+        return self._product_repository.list_active_products()
+
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def _format_money(grosze: int) -> str:
+    if grosze < 0:
+        raise ValueError("grosze cannot be negative")
+    zloty = grosze // 100
+    grosze_remainder = grosze % 100
+    return f"{zloty},{grosze_remainder:02d} zł"

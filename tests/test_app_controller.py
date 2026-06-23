@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from cash_assistant.controller.app_controller import AppController, AppState, ViewState
+from cash_assistant.controller.view_state import CartItemViewState, ProductViewState
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import SaleItem
@@ -135,18 +136,32 @@ def test_prepare_view_state_for_gui(
     scale: MockScale,
 ) -> None:
     scale.set_weight_grams(1_500)
-    item = controller.add_weighted_product(weighted_product())
+    controller.add_weighted_product(weighted_product())
     controller.start_payment()
     controller.set_paid_grosze(2_000)
 
     assert controller.prepare_view_state() == ViewState(
         app_state=AppState.PAYMENT,
-        cart_items=(item,),
+        products=(),
+        cart_items=(
+            CartItemViewState(
+                product_id=1,
+                product_name="Jabłka",
+                unit_price_text="6,99 zł/kg",
+                quantity_text="1,50 kg",
+                line_total_text="10,49 zł",
+            ),
+        ),
         technical_total_grosze=1_049,
+        technical_total_text="10,49 zł",
         rounded_total_grosze=1_050,
+        rounded_total_text="10,50 zł",
         paid_grosze=2_000,
+        paid_text="20,00 zł",
         change_grosze=950,
+        change_text="9,50 zł",
         missing_grosze=None,
+        missing_text=None,
         is_cart_empty=False,
     )
 
@@ -326,6 +341,22 @@ def test_product_methods_use_product_repository(controller: AppController) -> No
 
     assert controller.list_all_products() == [first, second]
     assert controller.list_active_products() == [first, second]
+    assert controller.prepare_view_state().products == (
+        ProductViewState(
+            product_id=first.id,
+            name="Bułka",
+            price_text="1,20 zł/szt.",
+            unit_text="szt.",
+            button_text="Bułka\n1,20 zł/szt.",
+        ),
+        ProductViewState(
+            product_id=second.id,
+            name="Jabłka",
+            price_text="6,99 zł/kg",
+            unit_text="kg",
+            button_text="Jabłka\n6,99 zł/kg",
+        ),
+    )
 
     assert second.id is not None
     updated_second = controller.update_product(

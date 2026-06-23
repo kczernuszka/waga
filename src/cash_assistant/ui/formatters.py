@@ -1,7 +1,5 @@
 """Formatting helpers for UI text."""
 
-from cash_assistant.core.product import UnitType
-
 
 def format_money(grosze: int) -> str:
     """Format grosze as Polish złoty text."""
@@ -26,27 +24,11 @@ def format_piece_quantity(quantity: int) -> str:
     return f"{quantity} szt."
 
 
-def format_unit_type(unit_type: UnitType) -> str:
-    """Format product unit type for UI display."""
-    match unit_type:
-        case UnitType.KG:
-            return "kg"
-        case UnitType.PIECE:
-            return "szt."
-
-
-def format_quantity(unit_type: UnitType, quantity_value: int) -> str:
-    """Format cart/sale quantity according to its unit type."""
-    match unit_type:
-        case UnitType.KG:
-            return format_weight_grams(quantity_value)
-        case UnitType.PIECE:
-            return format_piece_quantity(quantity_value)
-
-
-def format_unit_price(price_grosze: int, unit_type: UnitType) -> str:
+def format_unit_price(price_grosze: int, unit_text: str) -> str:
     """Format product price with a unit suffix."""
-    return f"{format_money(price_grosze)}/{format_unit_type(unit_type)}"
+    if unit_text == "":
+        raise ValueError("unit_text cannot be empty")
+    return f"{format_money(price_grosze)}/{unit_text}"
 
 
 def _ensure_non_negative(value: int, name: str) -> None:
