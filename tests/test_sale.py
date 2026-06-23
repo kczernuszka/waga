@@ -7,7 +7,6 @@ from cash_assistant.core.cart import Cart, CartItem
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import Sale
 
-
 CREATED_AT = datetime(2026, 6, 23, 12, 0, tzinfo=UTC)
 
 
@@ -145,7 +144,7 @@ def test_sale_keeps_snapshot_of_cart_items() -> None:
             line_total_grosze=1_049,
         ),
     )
-    assert sale.items[0] is not cart_item
+    assert id(sale.items[0]) != id(cart_item)
     assert isinstance(sale.items[0], sale_module.SaleItem)
     assert not isinstance(sale.items[0], CartItem)
 
