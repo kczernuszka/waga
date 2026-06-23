@@ -3,6 +3,10 @@
 from dataclasses import dataclass
 from enum import Enum
 
+from cash_assistant.controller.labels import (
+    PRODUCT_ACTIVE_TEXT,
+    PRODUCT_INACTIVE_TEXT,
+)
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
 
@@ -31,6 +35,46 @@ class ProductViewState:
     price_text: str
     unit_text: str
     button_text: str
+
+
+@dataclass(frozen=True)
+class UnitOptionViewState:
+    unit_code: str
+    label: str
+
+
+@dataclass(frozen=True)
+class ProductListItemViewState:
+    product_id: int
+    name: str
+    unit_code: str
+    unit_text: str
+    price_grosze: int
+    price_text: str
+    active: bool
+    active_text: str
+    sort_order: int
+
+
+@dataclass(frozen=True)
+class ProductEditViewState:
+    product_id: int | None
+    name: str
+    unit_code: str
+    price_grosze: int
+    active: bool
+    sort_order: int
+    unit_options: tuple[UnitOptionViewState, ...]
+
+
+@dataclass(frozen=True)
+class ProductEditInput:
+    product_id: int | None
+    name: str
+    unit_code: str
+    price_grosze: int
+    active: bool = True
+    sort_order: int = 0
 
 
 @dataclass(frozen=True)
@@ -75,6 +119,38 @@ def build_product_view_state(product: Product) -> ProductViewState:
     )
 
 
+def build_product_list_item_view_state(product: Product) -> ProductListItemViewState:
+    if product.id is None:
+        raise ValueError("product id is required for product list item view state")
+
+    unit_text = _format_unit_type(product.unit_type)
+    return ProductListItemViewState(
+        product_id=product.id,
+        name=product.name,
+        unit_code=product.unit_type.value,
+        unit_text=unit_text,
+        price_grosze=product.price_grosze,
+        price_text=_format_unit_price(product.price_grosze, unit_text),
+        active=product.active,
+        active_text=_format_active(product.active),
+        sort_order=product.sort_order,
+    )
+
+
+def build_product_edit_view_state(
+    product: Product | None = None,
+) -> ProductEditViewState:
+    return ProductEditViewState(
+        product_id=None if product is None else product.id,
+        name="" if product is None else product.name,
+        unit_code=UnitType.KG.value if product is None else product.unit_type.value,
+        price_grosze=0 if product is None else product.price_grosze,
+        active=True if product is None else product.active,
+        sort_order=0 if product is None else product.sort_order,
+        unit_options=_unit_options(),
+    )
+
+
 def build_cart_item_view_state(item: CartItem) -> CartItemViewState:
     unit_text = _format_unit_type(item.unit_type_snapshot)
     return CartItemViewState(
@@ -114,6 +190,10 @@ def _format_unit_type(unit_type: UnitType) -> str:
             return "szt."
 
 
+def _format_active(active: bool) -> str:
+    return PRODUCT_ACTIVE_TEXT if active else PRODUCT_INACTIVE_TEXT
+
+
 def _format_quantity(unit_type: UnitType, quantity_value: int) -> str:
     match unit_type:
         case UnitType.KG:
@@ -124,6 +204,13 @@ def _format_quantity(unit_type: UnitType, quantity_value: int) -> str:
 
 def _format_unit_price(price_grosze: int, unit_text: str) -> str:
     return f"{_format_money(price_grosze)}/{unit_text}"
+
+
+def _unit_options() -> tuple[UnitOptionViewState, ...]:
+    return (
+        UnitOptionViewState(unit_code=UnitType.KG.value, label="kg"),
+        UnitOptionViewState(unit_code=UnitType.PIECE.value, label="szt."),
+    )
 
 
 def _ensure_non_negative(value: int, name: str) -> None:

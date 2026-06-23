@@ -6,8 +6,13 @@ from datetime import UTC, datetime
 from cash_assistant.controller.view_state import (
     AppState,
     PaymentState,
+    ProductEditInput,
+    ProductEditViewState,
+    ProductListItemViewState,
     ViewState,
     build_cart_item_view_state,
+    build_product_edit_view_state,
+    build_product_list_item_view_state,
     build_product_view_state,
 )
 from cash_assistant.core.cart import Cart, CartItem
@@ -22,6 +27,9 @@ __all__ = [
     "AppController",
     "AppState",
     "PaymentState",
+    "ProductEditInput",
+    "ProductEditViewState",
+    "ProductListItemViewState",
     "ViewState",
 ]
 
@@ -64,6 +72,44 @@ class AppController:
 
     def deactivate_product(self, product_id: int) -> None:
         self._require_product_repository().deactivate_product(product_id)
+
+    def list_products_for_settings(self) -> list[ProductListItemViewState]:
+        return [
+            build_product_list_item_view_state(product)
+            for product in self._require_product_repository().list_all_products()
+        ]
+
+    def prepare_product_edit_view_state(
+        self,
+        product_id: int | None = None,
+    ) -> ProductEditViewState:
+        if product_id is None:
+            return build_product_edit_view_state()
+
+        product = self._require_product_repository().get_product(product_id)
+        if product is None:
+            raise ValueError(f"product with id {product_id} does not exist")
+        return build_product_edit_view_state(product)
+
+    def save_product_from_input(
+        self,
+        product_input: ProductEditInput,
+    ) -> ProductEditViewState:
+        product = Product(
+            id=product_input.product_id,
+            name=product_input.name,
+            unit_type=UnitType(product_input.unit_code),
+            price_grosze=product_input.price_grosze,
+            active=product_input.active,
+            sort_order=product_input.sort_order,
+        )
+
+        if product_input.product_id is None:
+            saved_product = self._require_product_repository().create_product(product)
+        else:
+            saved_product = self._require_product_repository().update_product(product)
+
+        return build_product_edit_view_state(saved_product)
 
     def add_weighted_product(self, product: Product) -> CartItem:
         self._clear_selected_piece_product()

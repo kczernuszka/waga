@@ -6,7 +6,15 @@ from pathlib import Path
 import pytest
 
 from cash_assistant.controller.app_controller import AppController, AppState, ViewState
-from cash_assistant.controller.view_state import CartItemViewState, ProductViewState
+from cash_assistant.controller.labels import PRODUCT_ACTIVE_TEXT, PRODUCT_INACTIVE_TEXT
+from cash_assistant.controller.view_state import (
+    CartItemViewState,
+    ProductEditInput,
+    ProductEditViewState,
+    ProductListItemViewState,
+    ProductViewState,
+    UnitOptionViewState,
+)
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import SaleItem
@@ -436,6 +444,165 @@ def test_product_methods_use_product_repository(controller: AppController) -> No
         name="Jabłka premium",
         unit_type=UnitType.KG,
         price_grosze=799,
+        active=False,
+        sort_order=5,
+    )
+
+
+def test_settings_product_list_returns_view_states_not_products(
+    controller: AppController,
+) -> None:
+    first = controller.create_product(
+        Product(
+            id=None,
+            name="Roll",
+            unit_type=UnitType.PIECE,
+            price_grosze=120,
+            sort_order=10,
+        )
+    )
+    second = controller.create_product(
+        Product(
+            id=None,
+            name="Apples",
+            unit_type=UnitType.KG,
+            price_grosze=699,
+            active=False,
+            sort_order=20,
+        )
+    )
+    assert first.id is not None
+    assert second.id is not None
+
+    products = controller.list_products_for_settings()
+
+    assert len(products) == 2
+    assert all(isinstance(product, ProductListItemViewState) for product in products)
+    assert all(not isinstance(product, Product) for product in products)
+    assert products[0].product_id == first.id
+    assert products[0].name == "Roll"
+    assert products[0].unit_code == "piece"
+    assert products[0].unit_text == "szt."
+    assert products[0].price_grosze == 120
+    assert products[0].price_text.endswith("/szt.")
+    assert products[0].active
+    assert products[0].active_text == PRODUCT_ACTIVE_TEXT
+    assert products[0].sort_order == 10
+    assert products[1].product_id == second.id
+    assert products[1].name == "Apples"
+    assert products[1].unit_code == "kg"
+    assert products[1].unit_text == "kg"
+    assert products[1].price_grosze == 699
+    assert products[1].price_text.endswith("/kg")
+    assert not products[1].active
+    assert products[1].active_text == PRODUCT_INACTIVE_TEXT
+    assert products[1].sort_order == 20
+
+
+def test_settings_new_product_edit_view_state_uses_primitives(
+    controller: AppController,
+) -> None:
+    view_state = controller.prepare_product_edit_view_state()
+
+    assert view_state == ProductEditViewState(
+        product_id=None,
+        name="",
+        unit_code="kg",
+        price_grosze=0,
+        active=True,
+        sort_order=0,
+        unit_options=(
+            UnitOptionViewState(unit_code="kg", label="kg"),
+            UnitOptionViewState(unit_code="piece", label="szt."),
+        ),
+    )
+    assert not isinstance(view_state, Product)
+
+
+def test_settings_existing_product_edit_view_state_uses_primitives(
+    controller: AppController,
+) -> None:
+    product = controller.create_product(
+        Product(
+            id=None,
+            name="Roll",
+            unit_type=UnitType.PIECE,
+            price_grosze=120,
+            active=False,
+            sort_order=10,
+        )
+    )
+    assert product.id is not None
+
+    view_state = controller.prepare_product_edit_view_state(product.id)
+
+    assert view_state == ProductEditViewState(
+        product_id=product.id,
+        name="Roll",
+        unit_code="piece",
+        price_grosze=120,
+        active=False,
+        sort_order=10,
+        unit_options=(
+            UnitOptionViewState(unit_code="kg", label="kg"),
+            UnitOptionViewState(unit_code="piece", label="szt."),
+        ),
+    )
+    assert not isinstance(view_state, Product)
+
+
+def test_settings_save_product_input_maps_primitives_to_domain_model(
+    controller: AppController,
+) -> None:
+    created = controller.save_product_from_input(
+        ProductEditInput(
+            product_id=None,
+            name="Roll",
+            unit_code="piece",
+            price_grosze=120,
+            active=True,
+            sort_order=10,
+        )
+    )
+    assert created.product_id is not None
+    assert not isinstance(created, Product)
+    assert controller.get_product(created.product_id) == Product(
+        id=created.product_id,
+        name="Roll",
+        unit_type=UnitType.PIECE,
+        price_grosze=120,
+        active=True,
+        sort_order=10,
+    )
+
+    updated = controller.save_product_from_input(
+        ProductEditInput(
+            product_id=created.product_id,
+            name="Apples",
+            unit_code="kg",
+            price_grosze=699,
+            active=False,
+            sort_order=5,
+        )
+    )
+
+    assert updated == ProductEditViewState(
+        product_id=created.product_id,
+        name="Apples",
+        unit_code="kg",
+        price_grosze=699,
+        active=False,
+        sort_order=5,
+        unit_options=(
+            UnitOptionViewState(unit_code="kg", label="kg"),
+            UnitOptionViewState(unit_code="piece", label="szt."),
+        ),
+    )
+    assert controller.get_product(created.product_id) == Product(
+        id=created.product_id,
+        name="Apples",
+        unit_type=UnitType.KG,
+        price_grosze=699,
         active=False,
         sort_order=5,
     )
