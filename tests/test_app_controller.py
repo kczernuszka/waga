@@ -13,11 +13,14 @@ from cash_assistant.controller.view_state import (
     ProductEditViewState,
     ProductListItemViewState,
     ProductViewState,
+    SaleDetailsViewState,
+    SaleItemViewState,
+    SaleSummaryViewState,
     UnitOptionViewState,
 )
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
-from cash_assistant.core.sale import SaleItem
+from cash_assistant.core.sale import Sale, SaleItem
 from cash_assistant.data.database import connect, initialize_schema
 from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
@@ -606,6 +609,99 @@ def test_settings_save_product_input_maps_primitives_to_domain_model(
         active=False,
         sort_order=5,
     )
+
+
+def test_history_sale_list_returns_summary_view_states_not_sales(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    controller.add_weighted_product(weighted_product())
+    controller.start_payment()
+    controller.set_paid_grosze(2_000)
+    first_sale = controller.save_sale()
+    assert first_sale.id is not None
+
+    controller.add_piece_product(piece_product(), quantity=3)
+    controller.start_payment()
+    controller.set_paid_grosze(500)
+    second_sale = controller.save_sale()
+    assert second_sale.id is not None
+
+    sales = controller.list_sales_for_history(limit=2)
+
+    assert len(sales) == 2
+    assert all(isinstance(sale, SaleSummaryViewState) for sale in sales)
+    assert all(not isinstance(sale, Sale) for sale in sales)
+    assert sales[0] == SaleSummaryViewState(
+        sale_id=second_sale.id,
+        created_at_text="2026-06-23 12:00",
+        raw_total_grosze=360,
+        raw_total_text="3,60 zł",
+        rounded_total_grosze=350,
+        rounded_total_text="3,50 zł",
+        paid_grosze=500,
+        paid_text="5,00 zł",
+        change_grosze=150,
+        change_text="1,50 zł",
+        items_count=1,
+    )
+    assert sales[1].sale_id == first_sale.id
+    assert sales[1].items_count == 1
+
+
+def test_history_sale_details_returns_view_state_not_sale(
+    controller: AppController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    controller.add_weighted_product(weighted_product())
+    controller.add_piece_product(piece_product(), quantity=3)
+    controller.start_payment()
+    controller.set_paid_grosze(2_000)
+    saved_sale = controller.save_sale()
+    assert saved_sale.id is not None
+
+    details = controller.read_sale_details(saved_sale.id)
+
+    assert details == SaleDetailsViewState(
+        sale_id=saved_sale.id,
+        created_at_text="2026-06-23 12:00",
+        raw_total_grosze=1_409,
+        raw_total_text="14,09 zł",
+        rounded_total_grosze=1_400,
+        rounded_total_text="14,00 zł",
+        paid_grosze=2_000,
+        paid_text="20,00 zł",
+        change_grosze=600,
+        change_text="6,00 zł",
+        items=(
+            SaleItemViewState(
+                product_id=1,
+                product_name="Jabłka",
+                unit_price_text="6,99 zł/kg",
+                quantity_text="1,50 kg",
+                line_total_text="10,49 zł",
+            ),
+            SaleItemViewState(
+                product_id=2,
+                product_name="Bułka",
+                unit_price_text="1,20 zł/szt.",
+                quantity_text="3 szt.",
+                line_total_text="3,60 zł",
+            ),
+        ),
+    )
+    assert details is not None
+    assert not isinstance(details, Sale)
+    assert all(isinstance(item, SaleItemViewState) for item in details.items)
+    assert all(not isinstance(item, SaleItem) for item in details.items)
+
+
+def test_history_sale_details_returns_none_for_missing_sale(
+    controller: AppController,
+) -> None:
+    assert controller.read_sale_details(404) is None
 
 
 def test_history_methods_use_sale_repository(

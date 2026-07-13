@@ -9,11 +9,15 @@ from cash_assistant.controller.view_state import (
     ProductEditInput,
     ProductEditViewState,
     ProductListItemViewState,
+    SaleDetailsViewState,
+    SaleSummaryViewState,
     ViewState,
     build_cart_item_view_state,
     build_product_edit_view_state,
     build_product_list_item_view_state,
     build_product_view_state,
+    build_sale_details_view_state,
+    build_sale_summary_view_state,
 )
 from cash_assistant.core.cart import Cart, CartItem
 from cash_assistant.core.money import calculate_change
@@ -30,6 +34,8 @@ __all__ = [
     "ProductEditInput",
     "ProductEditViewState",
     "ProductListItemViewState",
+    "SaleDetailsViewState",
+    "SaleSummaryViewState",
     "ViewState",
 ]
 
@@ -236,6 +242,18 @@ class AppController:
 
     def read_sale(self, sale_id: int) -> Sale | None:
         return self._sale_repository.read_sale(sale_id)
+
+    def list_sales_for_history(self, limit: int = 20) -> list[SaleSummaryViewState]:
+        return [
+            build_sale_summary_view_state(sale)
+            for sale in self._sale_repository.list_recent_sales(limit=limit)
+        ]
+
+    def read_sale_details(self, sale_id: int) -> SaleDetailsViewState | None:
+        sale = self._sale_repository.read_sale(sale_id)
+        if sale is None:
+            return None
+        return build_sale_details_view_state(sale)
 
     def prepare_view_state(self) -> ViewState:
         paid_grosze = None if self._payment is None else self._payment.paid_grosze

@@ -1,6 +1,7 @@
 """View-state DTOs and presentation builders for controllers."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
 
 from cash_assistant.controller.labels import (
@@ -9,6 +10,7 @@ from cash_assistant.controller.labels import (
 )
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
+from cash_assistant.core.sale import Sale, SaleItem
 
 
 class AppState(Enum):
@@ -87,6 +89,45 @@ class CartItemViewState:
 
 
 @dataclass(frozen=True)
+class SaleItemViewState:
+    product_id: int | None
+    product_name: str
+    unit_price_text: str
+    quantity_text: str
+    line_total_text: str
+
+
+@dataclass(frozen=True)
+class SaleSummaryViewState:
+    sale_id: int
+    created_at_text: str
+    raw_total_grosze: int
+    raw_total_text: str
+    rounded_total_grosze: int
+    rounded_total_text: str
+    paid_grosze: int
+    paid_text: str
+    change_grosze: int
+    change_text: str
+    items_count: int
+
+
+@dataclass(frozen=True)
+class SaleDetailsViewState:
+    sale_id: int
+    created_at_text: str
+    raw_total_grosze: int
+    raw_total_text: str
+    rounded_total_grosze: int
+    rounded_total_text: str
+    paid_grosze: int
+    paid_text: str
+    change_grosze: int
+    change_text: str
+    items: tuple[SaleItemViewState, ...]
+
+
+@dataclass(frozen=True)
 class ViewState:
     app_state: AppState
     products: tuple[ProductViewState, ...]
@@ -162,6 +203,51 @@ def build_cart_item_view_state(item: CartItem) -> CartItemViewState:
     )
 
 
+def build_sale_item_view_state(item: SaleItem) -> SaleItemViewState:
+    unit_text = _format_unit_type(item.unit_type_snapshot)
+    return SaleItemViewState(
+        product_id=item.product_id,
+        product_name=item.product_name_snapshot,
+        unit_price_text=_format_unit_price(item.unit_price_grosze_snapshot, unit_text),
+        quantity_text=_format_quantity(item.unit_type_snapshot, item.quantity_value),
+        line_total_text=_format_money(item.line_total_grosze),
+    )
+
+
+def build_sale_summary_view_state(sale: Sale) -> SaleSummaryViewState:
+    sale_id = _require_sale_id(sale)
+    return SaleSummaryViewState(
+        sale_id=sale_id,
+        created_at_text=_format_datetime(sale.created_at),
+        raw_total_grosze=sale.raw_total_grosze,
+        raw_total_text=_format_money(sale.raw_total_grosze),
+        rounded_total_grosze=sale.rounded_total_grosze,
+        rounded_total_text=_format_money(sale.rounded_total_grosze),
+        paid_grosze=sale.paid_grosze,
+        paid_text=_format_money(sale.paid_grosze),
+        change_grosze=sale.change_grosze,
+        change_text=_format_money(sale.change_grosze),
+        items_count=len(sale.items),
+    )
+
+
+def build_sale_details_view_state(sale: Sale) -> SaleDetailsViewState:
+    sale_id = _require_sale_id(sale)
+    return SaleDetailsViewState(
+        sale_id=sale_id,
+        created_at_text=_format_datetime(sale.created_at),
+        raw_total_grosze=sale.raw_total_grosze,
+        raw_total_text=_format_money(sale.raw_total_grosze),
+        rounded_total_grosze=sale.rounded_total_grosze,
+        rounded_total_text=_format_money(sale.rounded_total_grosze),
+        paid_grosze=sale.paid_grosze,
+        paid_text=_format_money(sale.paid_grosze),
+        change_grosze=sale.change_grosze,
+        change_text=_format_money(sale.change_grosze),
+        items=tuple(build_sale_item_view_state(item) for item in sale.items),
+    )
+
+
 def _format_money(grosze: int) -> str:
     _ensure_non_negative(grosze, "grosze")
     zloty = grosze // 100
@@ -204,6 +290,16 @@ def _format_quantity(unit_type: UnitType, quantity_value: int) -> str:
 
 def _format_unit_price(price_grosze: int, unit_text: str) -> str:
     return f"{_format_money(price_grosze)}/{unit_text}"
+
+
+def _format_datetime(value: datetime) -> str:
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
+def _require_sale_id(sale: Sale) -> int:
+    if sale.id is None:
+        raise ValueError("sale id is required for sale view state")
+    return sale.id
 
 
 def _unit_options() -> tuple[UnitOptionViewState, ...]:
