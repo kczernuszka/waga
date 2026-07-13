@@ -102,6 +102,11 @@ def create_piece_product(
     return product_id
 
 
+def add_weighted_product_to_cart(controller: AppController, product_id: int) -> None:
+    controller.select_product_by_id(product_id)
+    controller.add_selected_weighted_product()
+
+
 def test_public_api_does_not_expose_old_domain_methods() -> None:
     forbidden_public_names = {
         "cart",
@@ -136,8 +141,19 @@ def test_select_weighted_product_by_id_uses_current_scale_weight(
     product_id = create_weighted_product(controller, name="Apples", price_grosze=699)
     scale.set_weight_grams(1_500)
 
-    view_state = controller.select_product_by_id(product_id)
+    selected_view_state = controller.select_product_by_id(product_id)
+    view_state = controller.add_selected_weighted_product()
 
+    assert selected_view_state.app_state is AppState.READING_WEIGHT
+    assert selected_view_state.selected_product == ProductViewState(
+        product_id=product_id,
+        name="Apples",
+        price_text="6,99 zł/kg",
+        unit_text="kg",
+        button_text="Apples\n6,99 zł/kg",
+    )
+    assert selected_view_state.current_weight_grams == 1_500
+    assert selected_view_state.current_weight_text == "1,50 kg"
     assert view_state.app_state is AppState.CART_REVIEW
     assert view_state.cart_items == (
         CartItemViewState(
@@ -178,7 +194,7 @@ def test_remove_last_item_removes_most_recent_item(
     weighted_product_id = create_weighted_product(controller)
     piece_product_id = create_piece_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(weighted_product_id)
+    add_weighted_product_to_cart(controller, weighted_product_id)
     controller.select_product_by_id(piece_product_id)
     controller.add_selected_piece_product(quantity=3)
 
@@ -202,7 +218,7 @@ def test_clear_cart_removes_all_items(
     weighted_product_id = create_weighted_product(controller)
     piece_product_id = create_piece_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(weighted_product_id)
+    add_weighted_product_to_cart(controller, weighted_product_id)
     controller.select_product_by_id(piece_product_id)
     controller.add_selected_piece_product(quantity=3)
 
@@ -218,7 +234,7 @@ def test_prepare_view_state_for_gui(
 ) -> None:
     product_id = create_weighted_product(controller, name="Apples", price_grosze=699)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
     controller.start_payment()
     controller.set_paid_grosze(2_000)
 
@@ -253,7 +269,7 @@ def test_set_paid_grosze_calculates_change_when_payment_is_enough(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
     controller.start_payment()
 
     payment = controller.set_paid_grosze(2_000)
@@ -269,7 +285,7 @@ def test_set_paid_grosze_calculates_missing_amount_when_payment_is_too_low(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
     controller.start_payment()
 
     payment = controller.set_paid_grosze(1_000)
@@ -285,7 +301,7 @@ def test_set_paid_grosze_rejects_negative_payment(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
     controller.start_payment()
 
     with pytest.raises(ValueError):
@@ -303,7 +319,7 @@ def test_set_paid_without_start_payment_raises(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
 
     with pytest.raises(ValueError):
         controller.set_paid_grosze(2_000)
@@ -315,7 +331,7 @@ def test_start_payment_with_non_empty_cart_enters_payment_mode(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
 
     view_state = controller.start_payment()
 
@@ -328,7 +344,7 @@ def test_set_paid_after_start_payment_updates_state(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
     controller.start_payment()
 
     payment = controller.set_paid_grosze(2_000)
@@ -347,7 +363,7 @@ def test_save_sale_uses_sale_repository_and_starts_new_cart(
     weighted_product_id = create_weighted_product(controller, name="Apples", price_grosze=699)
     piece_product_id = create_piece_product(controller, name="Roll", price_grosze=120)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(weighted_product_id)
+    add_weighted_product_to_cart(controller, weighted_product_id)
     controller.select_product_by_id(piece_product_id)
     controller.add_selected_piece_product(quantity=3)
     controller.start_payment()
@@ -394,7 +410,7 @@ def test_save_sale_requires_accepted_payment(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
 
     with pytest.raises(ValueError):
         controller.save_sale()
@@ -406,7 +422,7 @@ def test_save_sale_rejects_missing_payment(
 ) -> None:
     product_id = create_weighted_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(product_id)
+    add_weighted_product_to_cart(controller, product_id)
     controller.start_payment()
     controller.set_paid_grosze(1_000)
 
@@ -598,7 +614,7 @@ def test_history_sale_list_returns_summary_view_states(
     weighted_product_id = create_weighted_product(controller)
     piece_product_id = create_piece_product(controller)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(weighted_product_id)
+    add_weighted_product_to_cart(controller, weighted_product_id)
     controller.start_payment()
     controller.set_paid_grosze(2_000)
     first_sale = controller.save_sale()
@@ -648,7 +664,7 @@ def test_history_sale_details_returns_view_state(
     weighted_product_id = create_weighted_product(controller, name="Apples", price_grosze=699)
     piece_product_id = create_piece_product(controller, name="Roll", price_grosze=120)
     scale.set_weight_grams(1_500)
-    controller.select_product_by_id(weighted_product_id)
+    add_weighted_product_to_cart(controller, weighted_product_id)
     controller.select_product_by_id(piece_product_id)
     controller.add_selected_piece_product(quantity=3)
     controller.start_payment()

@@ -100,8 +100,11 @@ def test_digit_in_product_selection_selects_weighted_product(
 ) -> None:
     scale.set_weight_grams(1_500)
 
-    result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    selected_result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    result = keyboard_controller.handle(Command.CONFIRM)
 
+    assert isinstance(selected_result, ViewState)
+    assert selected_result.app_state is AppState.READING_WEIGHT
     assert isinstance(result, ViewState)
     assert result.cart_items[0].product_name == "Apples"
     assert result.cart_items[0].quantity_text == "1,50 kg"
@@ -137,6 +140,7 @@ def test_select_product_command_accepts_product_id_payload(
     scale.set_weight_grams(2_000)
 
     keyboard_controller.handle(Command.SELECT_PRODUCT, 1)
+    keyboard_controller.handle(Command.CONFIRM)
 
     assert app_controller.prepare_view_state().technical_total_grosze == 1_398
 
@@ -167,8 +171,12 @@ def test_keyboard_shortcut_maps_to_correct_product_id_from_view_state(
     keyboard_controller = KeyboardController(app_controller=app_controller)
     scale.set_weight_grams(1_000)
 
-    result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    selected_result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    result = keyboard_controller.handle(Command.CONFIRM)
 
+    assert isinstance(selected_result, ViewState)
+    assert selected_result.selected_product is not None
+    assert selected_result.selected_product.product_id == first_slot_product_id
     assert isinstance(result, ViewState)
     assert result.cart_items[0].product_id == first_slot_product_id
     assert result.cart_items[0].product_name == "Pears"
@@ -193,8 +201,10 @@ def test_shortcut_number_is_not_treated_as_product_id(
     keyboard_controller = KeyboardController(app_controller=app_controller)
     scale.set_weight_grams(1_000)
 
-    result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    selected_result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    result = keyboard_controller.handle(Command.CONFIRM)
 
+    assert isinstance(selected_result, ViewState)
     assert isinstance(result, ViewState)
     assert product_with_id_1 == 1
     assert first_slot_product_id == 2
@@ -208,6 +218,7 @@ def test_start_payment_and_digits_calculate_change(
 ) -> None:
     scale.set_weight_grams(1_500)
     keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    keyboard_controller.handle(Command.CONFIRM)
 
     keyboard_controller.handle(Command.START_PAYMENT)
     keyboard_controller.handle(Command.DIGIT_TYPED, "2")
@@ -227,6 +238,7 @@ def test_payment_buffer_accepts_decimal_separator(
 ) -> None:
     scale.set_weight_grams(1_500)
     keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    keyboard_controller.handle(Command.CONFIRM)
 
     keyboard_controller.handle(Command.START_PAYMENT)
     keyboard_controller.handle(Command.DIGIT_TYPED, "1")
@@ -247,6 +259,7 @@ def test_save_sale_command_uses_app_controller_and_repository(
 ) -> None:
     scale.set_weight_grams(1_500)
     keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    keyboard_controller.handle(Command.CONFIRM)
     keyboard_controller.handle(Command.START_PAYMENT)
     keyboard_controller.handle(Command.DIGIT_TYPED, "2")
     keyboard_controller.handle(Command.DIGIT_TYPED, "0")
@@ -266,6 +279,7 @@ def test_remove_last_and_clear_cart_commands(
 ) -> None:
     scale.set_weight_grams(1_500)
     keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    keyboard_controller.handle(Command.CONFIRM)
     keyboard_controller.handle(Command.DIGIT_TYPED, "2")
     keyboard_controller.handle(Command.DIGIT_TYPED, "3")
     keyboard_controller.handle(Command.CONFIRM)
@@ -288,6 +302,7 @@ def test_cancel_exits_current_input_without_clearing_cart(
 ) -> None:
     scale.set_weight_grams(1_500)
     keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    keyboard_controller.handle(Command.CONFIRM)
     keyboard_controller.handle(Command.START_PAYMENT)
     keyboard_controller.handle(Command.DIGIT_TYPED, "2")
 

@@ -86,6 +86,9 @@ class KeyboardController:
             self._payment_buffer += digit
             return self._app_controller.set_paid_grosze(self._payment_buffer_to_grosze())
 
+        if app_state is AppState.READING_WEIGHT:
+            return None
+
         return self._select_product(self._product_id_by_shortcut(digit))
 
     def _handle_decimal_separator(self) -> None:
@@ -108,6 +111,10 @@ class KeyboardController:
             quantity = int(self._quantity_buffer)
             self._clear_input_buffers()
             return self._app_controller.add_selected_piece_product(quantity=quantity)
+
+        if app_state is AppState.READING_WEIGHT:
+            self._clear_input_buffers()
+            return self._app_controller.add_selected_weighted_product()
 
         if app_state is AppState.PAYMENT:
             return self._app_controller.save_sale()

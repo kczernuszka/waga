@@ -137,6 +137,9 @@ class SaleDetailsViewState:
 class ViewState:
     app_state: AppState
     products: tuple[ProductViewState, ...]
+    selected_product: ProductViewState | None
+    current_weight_grams: int | None
+    current_weight_text: str | None
     cart_items: tuple[CartItemViewState, ...]
     technical_total_grosze: int
     technical_total_text: str

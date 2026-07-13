@@ -3,13 +3,14 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 
-from cash_assistant.controller.labels import CURRENCY_TEXT
+from cash_assistant.controller.labels import CURRENCY_TEXT, UNIT_KG_TEXT
 from cash_assistant.controller.view_state import (
     AppState,
     PaymentState,
     ProductEditInput,
     ProductEditViewState,
     ProductListItemViewState,
+    ProductViewState,
     SaleDetailsViewState,
     SaleSummaryViewState,
     ViewState,
@@ -57,6 +58,7 @@ class AppController:
         self._state = AppState.PRODUCT_SELECTION
         self._payment: PaymentState | None = None
         self._selected_piece_product_id: int | None = None
+        self._selected_weighted_product_id: int | None = None
 
     def list_products_for_settings(self) -> list[ProductListItemViewState]:
         return [
@@ -100,12 +102,23 @@ class AppController:
         product = self._require_active_product(product_id)
 
         if product.unit_type is UnitType.KG:
-            self._add_weighted_product(product)
+            self._reset_payment()
+            self._selected_weighted_product_id = product_id
+            self._selected_piece_product_id = None
+            self._state = AppState.READING_WEIGHT
             return self.prepare_view_state()
 
         self._reset_payment()
+        self._selected_weighted_product_id = None
         self._selected_piece_product_id = product_id
         self._state = AppState.ENTERING_QUANTITY
+        return self.prepare_view_state()
+
+    def add_selected_weighted_product(self) -> ViewState:
+        if self._selected_weighted_product_id is None:
+            raise ValueError("no weighted product selected")
+        product = self._require_active_product(self._selected_weighted_product_id)
+        self._add_weighted_product(product)
         return self.prepare_view_state()
 
     def add_selected_piece_product(self, quantity: int) -> ViewState:
@@ -118,14 +131,14 @@ class AppController:
     def remove_last_item(self) -> ViewState:
         self._cart.remove_last_item()
         self._reset_payment()
-        self._clear_selected_piece_product()
+        self._clear_selected_product()
         self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
         return self.prepare_view_state()
 
     def clear_cart(self) -> ViewState:
         self._cart.clear()
         self._reset_payment()
-        self._clear_selected_piece_product()
+        self._clear_selected_product()
         self._state = AppState.PRODUCT_SELECTION
         return self.prepare_view_state()
 
@@ -133,13 +146,13 @@ class AppController:
         if self._cart.is_empty:
             raise ValueError("cannot start payment with empty cart")
         self._reset_payment()
-        self._clear_selected_piece_product()
+        self._clear_selected_product()
         self._state = AppState.PAYMENT
         return self.prepare_view_state()
 
     def cancel_current_operation(self) -> ViewState:
         self._reset_payment()
-        self._clear_selected_piece_product()
+        self._clear_selected_product()
         self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
         return self.prepare_view_state()
 
@@ -193,7 +206,7 @@ class AppController:
         sale_details = build_sale_details_view_state(saved_sale)
         self._cart = Cart()
         self._reset_payment()
-        self._clear_selected_piece_product()
+        self._clear_selected_product()
         self._state = AppState.PRODUCT_SELECTION
         return sale_details
 
@@ -213,12 +226,23 @@ class AppController:
         paid_grosze = None if self._payment is None else self._payment.paid_grosze
         change_grosze = None if self._payment is None else self._payment.change_grosze
         missing_grosze = None if self._payment is None else self._payment.missing_grosze
+        selected_product = self._selected_product_view_state()
+        current_weight_grams = (
+            self._scale.get_weight_grams()
+            if self._state is AppState.READING_WEIGHT
+            else None
+        )
 
         return ViewState(
             app_state=self._state,
             products=tuple(
                 build_product_view_state(product)
                 for product in self._list_active_products_if_repository_exists()
+            ),
+            selected_product=selected_product,
+            current_weight_grams=current_weight_grams,
+            current_weight_text=(
+                None if current_weight_grams is None else _format_weight_grams(current_weight_grams)
             ),
             cart_items=tuple(build_cart_item_view_state(item) for item in self._cart.items),
             technical_total_grosze=self._cart.technical_total_grosze,
@@ -237,11 +261,12 @@ class AppController:
     def _reset_payment(self) -> None:
         self._payment = None
 
-    def _clear_selected_piece_product(self) -> None:
+    def _clear_selected_product(self) -> None:
         self._selected_piece_product_id = None
+        self._selected_weighted_product_id = None
 
     def _add_weighted_product(self, product: Product) -> CartItem:
-        self._clear_selected_piece_product()
+        self._clear_selected_product()
         item = self._cart.add_weighted_product(
             product,
             weight_grams=self._scale.get_weight_grams(),
@@ -251,7 +276,7 @@ class AppController:
         return item
 
     def _add_piece_product(self, product: Product, quantity: int) -> CartItem:
-        self._clear_selected_piece_product()
+        self._clear_selected_product()
         item = self._cart.add_piece_product(product, quantity=quantity)
         self._reset_payment()
         self._state = AppState.CART_REVIEW
@@ -275,6 +300,12 @@ class AppController:
             return []
         return self._product_repository.list_active_products()
 
+    def _selected_product_view_state(self) -> ProductViewState | None:
+        product_id = self._selected_piece_product_id or self._selected_weighted_product_id
+        if product_id is None:
+            return None
+        return build_product_view_state(self._require_active_product(product_id))
+
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
@@ -286,3 +317,12 @@ def _format_money(grosze: int) -> str:
     zloty = grosze // 100
     grosze_remainder = grosze % 100
     return f"{zloty},{grosze_remainder:02d} {CURRENCY_TEXT}"
+
+
+def _format_weight_grams(weight_grams: int) -> str:
+    if weight_grams < 0:
+        raise ValueError("weight_grams cannot be negative")
+    kilograms_hundredths = (weight_grams + 5) // 10
+    kilograms = kilograms_hundredths // 100
+    hundredths_remainder = kilograms_hundredths % 100
+    return f"{kilograms},{hundredths_remainder:02d} {UNIT_KG_TEXT}"
