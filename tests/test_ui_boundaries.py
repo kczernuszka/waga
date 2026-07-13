@@ -49,6 +49,24 @@ def test_sales_screen_paid_input_uses_whole_zloty_values() -> None:
     assert _whole_zloty_to_grosze(20) == 2_000
 
 
+def test_main_window_installs_global_event_filter_for_sales_screen() -> None:
+    source = (UI_PATH / "main_window.py").read_text(encoding="utf-8")
+
+    assert "installEventFilter(self)" in source
+    assert "def eventFilter(" in source
+    assert "self.centralWidget() is self._sales_screen" in source
+    assert "handle_global_key_event(event)" in source
+
+
+def test_sales_screen_global_key_handling_uses_keyboard_controller() -> None:
+    source = (UI_PATH / "sales_screen.py").read_text(encoding="utf-8")
+
+    assert "KeyboardController(controller)" in source
+    assert "def handle_global_key_event(" in source
+    assert "self._keyboard_controller.handle(command, payload)" in source
+    assert "Numpad digits should work independently of widget focus" in source
+
+
 def _imported_modules(module: ast.Module) -> set[str]:
     imports: set[str] = set()
     for node in ast.walk(module):

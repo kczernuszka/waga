@@ -53,7 +53,7 @@ class KeyboardController:
             case Command.CANCEL:
                 self._cancel()
             case Command.BACKSPACE:
-                self._backspace()
+                result = self._backspace()
             case Command.REMOVE_LAST_ITEM:
                 self._clear_input_buffers()
                 result = self._app_controller.remove_last_item()
@@ -87,6 +87,9 @@ class KeyboardController:
             return self._app_controller.set_paid_grosze(self._payment_buffer_to_grosze())
 
         if app_state is AppState.READING_WEIGHT:
+            return None
+
+        if digit == "0":
             return None
 
         return self._select_product(self._product_id_by_shortcut(digit))
@@ -125,17 +128,27 @@ class KeyboardController:
         self._clear_input_buffers()
         self._app_controller.cancel_current_operation()
 
-    def _backspace(self) -> None:
-        app_state = self._app_controller.prepare_view_state().app_state
+    @property
+    def quantity_buffer_text(self) -> str:
+        return self._quantity_buffer
+
+    def _backspace(self) -> Any:
+        view_state = self._app_controller.prepare_view_state()
+        app_state = view_state.app_state
 
         if app_state is AppState.ENTERING_QUANTITY:
             self._quantity_buffer = self._quantity_buffer[:-1]
-            return
+            return None
 
         if app_state is AppState.PAYMENT:
             self._payment_buffer = self._payment_buffer[:-1]
             paid_grosze = 0 if self._payment_buffer == "" else self._payment_buffer_to_grosze()
-            self._app_controller.set_paid_grosze(paid_grosze)
+            return self._app_controller.set_paid_grosze(paid_grosze)
+
+        if not view_state.is_cart_empty:
+            return self._app_controller.remove_last_item()
+
+        return None
 
     def _select_product(self, product_id: int) -> Any:
         self._clear_input_buffers()

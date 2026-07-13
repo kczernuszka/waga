@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from cash_assistant.controller.app_controller import AppController
+from cash_assistant.controller.keyboard_controller import Command, KeyboardController
 from cash_assistant.controller.labels import (
     ERROR_DIALOG_TITLE,
     NO_CART_ITEMS_TEXT,
@@ -47,6 +48,7 @@ class SalesScreen(QWidget):
     def __init__(self, controller: AppController) -> None:
         super().__init__()
         self._controller = controller
+        self._keyboard_controller = KeyboardController(controller)
         self._view_state = controller.prepare_view_state()
         self._product_buttons: list[QPushButton] = []
         self._quantity_digits = ""
@@ -80,26 +82,17 @@ class SalesScreen(QWidget):
         finally:
             self._is_refreshing = False
 
+    def handle_global_key_event(self, event: QKeyEvent) -> bool:
+        command = _command_from_key_event(event)
+        if command is None:
+            return False
+
+        self._run_keyboard_command(command[0], command[1])
+        return True
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        key = event.key()
-        text = event.text()
-
-        if text.isdecimal() and len(text) == 1:
-            self._handle_digit(text)
+        if self.handle_global_key_event(event):
             return
-
-        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Plus):
-            self._confirm_current_action()
-            return
-
-        if key == Qt.Key.Key_Escape:
-            self._run_controller_action(self._controller.cancel_current_operation)
-            return
-
-        if key == Qt.Key.Key_Backspace:
-            self._handle_backspace()
-            return
-
         super().keyPressEvent(event)
 
     def _build_layout(self) -> None:
@@ -142,7 +135,7 @@ class SalesScreen(QWidget):
         )
         self._confirm_selection_button.clicked.connect(self._confirm_current_action)
         self._cancel_selection_button.clicked.connect(
-            lambda: self._run_controller_action(self._controller.cancel_current_operation)
+            lambda: self._run_keyboard_command(Command.CANCEL)
         )
 
     def _refresh_products_panel(self, view_state: ViewState) -> None:
@@ -164,8 +157,9 @@ class SalesScreen(QWidget):
             button = QPushButton(product.button_text)
             button.setMinimumHeight(72)
             button.clicked.connect(
-                lambda _checked=False, product_id=product.product_id: self._select_product(
-                    product_id
+                lambda _checked=False, product_id=product.product_id: self._run_keyboard_command(
+                    Command.SELECT_PRODUCT,
+                    product_id,
                 )
             )
             self._product_buttons.append(button)
@@ -218,29 +212,7 @@ class SalesScreen(QWidget):
         self._remove_last_button.setEnabled(not view_state.is_cart_empty)
         self._clear_cart_button.setEnabled(not view_state.is_cart_empty)
         self._start_payment_button.setEnabled(not view_state.is_cart_empty)
-
-    def _handle_digit(self, digit: str) -> None:
-        if self._view_state.app_state is AppState.ENTERING_QUANTITY:
-            self._quantity_digits += digit
-            self._quantity_input.setValue(int(self._quantity_digits))
-            return
-
-        if digit == "0":
-            return
-
-        index = int(digit) - 1
-        if 0 <= index < len(self._view_state.products):
-            self._select_product(self._view_state.products[index].product_id)
-
-    def _handle_backspace(self) -> None:
-        if self._view_state.app_state is AppState.ENTERING_QUANTITY:
-            self._quantity_digits = self._quantity_digits[:-1]
-            quantity = int(self._quantity_digits) if self._quantity_digits else 1
-            self._quantity_input.setValue(quantity)
-            return
-
-        if not self._view_state.is_cart_empty:
-            self._run_controller_action(self._controller.remove_last_item)
+        self._sync_keyboard_buffers(view_state)
 
     def _confirm_current_action(self) -> None:
         if self._view_state.app_state is AppState.ENTERING_QUANTITY:
@@ -253,13 +225,18 @@ class SalesScreen(QWidget):
         if self._view_state.app_state is AppState.READING_WEIGHT:
             self._run_controller_action(self._controller.add_selected_weighted_product)
 
-    def _select_product(self, product_id: int) -> None:
-        self._run_controller_action(lambda: self._controller.select_product_by_id(product_id))
-
     def _quantity_value_changed(self, quantity: int) -> None:
         if self._is_refreshing or self._view_state.app_state is not AppState.ENTERING_QUANTITY:
             return
         self._quantity_digits = str(quantity)
+
+    def _run_keyboard_command(self, command: Command, payload: object | None = None) -> None:
+        try:
+            self._keyboard_controller.handle(command, payload)
+        except ValueError as error:
+            self._show_error(str(error))
+            return
+        self.refresh()
 
     def _run_controller_action(self, action: Callable[[], object]) -> None:
         try:
@@ -268,6 +245,14 @@ class SalesScreen(QWidget):
             self._show_error(str(error))
             return
         self.refresh()
+
+    def _sync_keyboard_buffers(self, view_state: ViewState) -> None:
+        if view_state.app_state is not AppState.ENTERING_QUANTITY:
+            return
+
+        quantity_text = self._keyboard_controller.quantity_buffer_text
+        quantity = int(quantity_text) if quantity_text else 1
+        self._quantity_input.setValue(quantity)
 
     def _show_error(self, message: str) -> None:
         QMessageBox.warning(self, ERROR_DIALOG_TITLE, message)
@@ -320,3 +305,42 @@ def _selected_product_text(view_state: ViewState) -> str:
 
 def _whole_zloty_to_grosze(zloty: int) -> int:
     return zloty * 100
+
+
+def _command_from_key_event(event: QKeyEvent) -> tuple[Command, object | None] | None:
+    digit = _digit_from_key_event(event)
+    if digit is not None:
+        return Command.DIGIT_TYPED, digit
+
+    key = event.key()
+    if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Plus):
+        return Command.CONFIRM, None
+    if key == Qt.Key.Key_Escape:
+        return Command.CANCEL, None
+    if key == Qt.Key.Key_Backspace:
+        return Command.BACKSPACE, None
+    if key == Qt.Key.Key_Minus:
+        return Command.REMOVE_LAST_ITEM, None
+    return None
+
+
+def _digit_from_key_event(event: QKeyEvent) -> str | None:
+    text = event.text()
+    # Numpad digits should work independently of widget focus; Qt usually exposes
+    # both numpad and top-row numbers as one-character digit text.
+    if text.isdecimal() and len(text) == 1:
+        return text
+
+    digit_by_key = {
+        Qt.Key.Key_0: "0",
+        Qt.Key.Key_1: "1",
+        Qt.Key.Key_2: "2",
+        Qt.Key.Key_3: "3",
+        Qt.Key.Key_4: "4",
+        Qt.Key.Key_5: "5",
+        Qt.Key.Key_6: "6",
+        Qt.Key.Key_7: "7",
+        Qt.Key.Key_8: "8",
+        Qt.Key.Key_9: "9",
+    }
+    return digit_by_key.get(Qt.Key(event.key()))
