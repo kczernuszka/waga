@@ -1,4 +1,5 @@
-from datetime import UTC, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -7,7 +8,8 @@ from cash_assistant.core.cart import Cart, CartItem
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import Sale
 
-CREATED_AT = datetime(2026, 6, 23, 12, 0, tzinfo=UTC)
+POLAND_TIME_ZONE = ZoneInfo("Europe/Warsaw")
+CREATED_AT = datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE)
 
 
 def weighted_product() -> Product:
@@ -152,6 +154,15 @@ def test_sale_keeps_snapshot_of_cart_items() -> None:
 def test_create_sale_rejects_empty_cart() -> None:
     with pytest.raises(ValueError):
         Sale.from_cart(Cart(), paid_grosze=2_000, created_at=CREATED_AT)
+
+
+def test_create_sale_rejects_naive_created_at() -> None:
+    with pytest.raises(ValueError):
+        Sale.from_cart(
+            cart_with_weighted_product(),
+            paid_grosze=2_000,
+            created_at=datetime(2026, 6, 23, 12, 0),
+        )
 
 
 def test_create_sale_rejects_payment_lower_than_rounded_total() -> None:

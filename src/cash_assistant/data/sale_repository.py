@@ -19,6 +19,8 @@ class SaleRepository:
         if not sale.items:
             raise ValueError("cannot save sale without items")
 
+        created_at = _created_at_for_storage(sale.created_at)
+
         with transaction(self._connection):
             cursor = self._connection.execute(
                 """
@@ -32,7 +34,7 @@ class SaleRepository:
                 VALUES (?, ?, ?, ?, ?)
                 """,
                 (
-                    sale.created_at.isoformat(),
+                    created_at.isoformat(timespec="seconds"),
                     sale.raw_total_grosze,
                     sale.rounded_total_grosze,
                     sale.paid_grosze,
@@ -70,7 +72,7 @@ class SaleRepository:
                 ],
             )
 
-        return replace(sale, id=sale_id)
+        return replace(sale, id=sale_id, created_at=created_at)
 
     def list_recent_sales(self, limit: int = 20) -> list[Sale]:
         if limit < 0:
@@ -142,3 +144,8 @@ def _row_to_sale_item(row: sqlite3.Row) -> SaleItem:
         quantity_value=int(row["quantity_value"]),
         line_total_grosze=int(row["line_total_grosze"]),
     )
+
+
+def _created_at_for_storage(value: datetime) -> datetime:
+    stored_text = value.isoformat(timespec="seconds")
+    return datetime.fromisoformat(stored_text)

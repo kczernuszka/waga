@@ -1,11 +1,16 @@
+from datetime import UTC, datetime
+
 from cash_assistant.controller.view_state import (
     CartItemViewState,
     ProductViewState,
+    SaleSummaryViewState,
     build_cart_item_view_state,
     build_product_view_state,
+    build_sale_summary_view_state,
 )
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
+from cash_assistant.core.sale import Sale
 
 
 def test_build_product_view_state_for_weighted_product() -> None:
@@ -58,4 +63,30 @@ def test_build_cart_item_view_state() -> None:
         unit_price_text="6,99 zł/kg",
         quantity_text="1,50 kg",
         line_total_text="10,49 zł",
+    )
+
+
+def test_sale_summary_formats_created_at_in_poland_time_zone() -> None:
+    assert build_sale_summary_view_state(
+        Sale(
+            id=1,
+            created_at=datetime(2026, 6, 23, 10, 0, tzinfo=UTC),
+            raw_total_grosze=1_000,
+            rounded_total_grosze=1_000,
+            paid_grosze=2_000,
+            change_grosze=1_000,
+            items=(),
+        )
+    ) == SaleSummaryViewState(
+        sale_id=1,
+        created_at_text="2026-06-23 12:00",
+        raw_total_grosze=1_000,
+        raw_total_text="10,00 zł",
+        rounded_total_grosze=1_000,
+        rounded_total_text="10,00 zł",
+        paid_grosze=2_000,
+        paid_text="20,00 zł",
+        change_grosze=1_000,
+        change_text="10,00 zł",
+        items_count=0,
     )

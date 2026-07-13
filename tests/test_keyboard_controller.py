@@ -1,7 +1,8 @@
 import sqlite3
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -13,7 +14,8 @@ from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
 from cash_assistant.hardware.mock_scale import MockScale
 
-CREATED_AT = datetime(2026, 6, 23, 12, 0, tzinfo=UTC)
+POLAND_TIME_ZONE = ZoneInfo("Europe/Warsaw")
+CREATED_AT = datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE)
 
 
 @pytest.fixture

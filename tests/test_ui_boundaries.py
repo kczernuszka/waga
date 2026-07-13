@@ -68,12 +68,23 @@ def test_settings_screen_price_parser_accepts_comma_text() -> None:
     assert _parse_price_grosze("1,2") == 120
 
 
+def test_history_screen_uses_controller_dtos_for_sales_history() -> None:
+    source = (UI_PATH / "history_screen.py").read_text(encoding="utf-8")
+
+    assert "list_sales_for_history()" in source
+    assert "read_sale_details(sale_id)" in source
+    assert "SaleSummaryViewState" in source
+    assert "SaleDetailsViewState" in source
+    assert "Brak sprzedaży" not in source
+
+
 def test_main_window_installs_global_event_filter_for_sales_screen() -> None:
     source = (UI_PATH / "main_window.py").read_text(encoding="utf-8")
 
     assert "installEventFilter(self)" in source
     assert "def eventFilter(" in source
     assert "QStackedWidget" in source
+    assert "HistoryScreen" in source
     assert "setCentralWidget(self._screen_stack)" in source
     assert "setCentralWidget(self._sales_screen)" not in source
     assert "setCentralWidget(self._settings_screen)" not in source

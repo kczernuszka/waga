@@ -1,9 +1,10 @@
 """Main application controller."""
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
 
 from cash_assistant.controller.labels import CURRENCY_TEXT, UNIT_KG_TEXT
+from cash_assistant.controller.time import now_in_poland
 from cash_assistant.controller.view_state import (
     AppState,
     PaymentState,
@@ -53,7 +54,7 @@ class AppController:
         self._scale = scale
         self._product_repository = product_repository
         self._sale_repository = sale_repository
-        self._clock = clock or _utc_now
+        self._clock = clock or now_in_poland
         self._cart = Cart()
         self._state = AppState.PRODUCT_SELECTION
         self._payment: PaymentState | None = None
@@ -305,10 +306,6 @@ class AppController:
         if product_id is None:
             return None
         return build_product_view_state(self._require_active_product(product_id))
-
-
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
 
 
 def _format_money(grosze: int) -> str:

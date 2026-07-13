@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget
 
 from cash_assistant.controller.app_controller import AppController
 from cash_assistant.controller.labels import APP_TITLE
+from cash_assistant.ui.history_screen import HistoryScreen
 from cash_assistant.ui.sales_screen import SalesScreen
 from cash_assistant.ui.settings_screen import SettingsScreen
 
@@ -13,15 +14,24 @@ from cash_assistant.ui.settings_screen import SettingsScreen
 class MainWindow(QMainWindow):
     def __init__(self, controller: AppController) -> None:
         super().__init__()
-        self._sales_screen = SalesScreen(controller, on_open_settings=self.show_settings_screen)
+        self._sales_screen = SalesScreen(
+            controller,
+            on_open_settings=self.show_settings_screen,
+            on_open_history=self.show_history_screen,
+        )
         self._settings_screen = SettingsScreen(
             controller,
             on_back_to_sales=self.show_sales_screen,
             on_products_changed=self._refresh_sales_screen,
         )
+        self._history_screen = HistoryScreen(
+            controller,
+            on_back_to_sales=self.show_sales_screen,
+        )
         self._screen_stack = QStackedWidget()
         self._screen_stack.addWidget(self._sales_screen)
         self._screen_stack.addWidget(self._settings_screen)
+        self._screen_stack.addWidget(self._history_screen)
 
         self.setWindowTitle(APP_TITLE)
         self.setCentralWidget(self._screen_stack)
@@ -41,6 +51,10 @@ class MainWindow(QMainWindow):
     def show_settings_screen(self) -> None:
         self._settings_screen.refresh()
         self._screen_stack.setCurrentWidget(self._settings_screen)
+
+    def show_history_screen(self) -> None:
+        self._history_screen.refresh()
+        self._screen_stack.setCurrentWidget(self._history_screen)
 
     def _refresh_sales_screen(self) -> None:
         self._sales_screen.refresh()

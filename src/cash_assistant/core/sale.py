@@ -28,6 +28,9 @@ class Sale:
     change_grosze: int
     items: tuple[SaleItem, ...]
 
+    def __post_init__(self) -> None:
+        _ensure_timezone_aware(self.created_at)
+
     @classmethod
     def from_cart(
         cls,
@@ -63,3 +66,8 @@ class Sale:
                 for item in cart.items
             ),
         )
+
+
+def _ensure_timezone_aware(value: datetime) -> None:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("created_at must be timezone-aware")

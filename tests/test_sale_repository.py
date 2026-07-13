@@ -1,5 +1,6 @@
 import sqlite3
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -8,6 +9,8 @@ from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import Sale, SaleItem
 from cash_assistant.data.database import initialize_schema
 from cash_assistant.data.sale_repository import SaleRepository
+
+POLAND_TIME_ZONE = ZoneInfo("Europe/Warsaw")
 
 
 @pytest.fixture
@@ -46,14 +49,14 @@ def test_save_sale_returns_sale_with_database_id_and_keeps_items(
     connection: sqlite3.Connection,
 ) -> None:
     repository = SaleRepository(connection)
-    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=UTC))
+    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE))
 
     saved_sale = repository.save_sale(sale)
 
     assert saved_sale.id == 1
     assert saved_sale == Sale(
         id=1,
-        created_at=datetime(2026, 6, 23, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE),
         raw_total_grosze=1_409,
         rounded_total_grosze=1_400,
         paid_grosze=2_000,
@@ -83,11 +86,27 @@ def test_read_sale_returns_saved_sale_with_item_snapshots(
     connection: sqlite3.Connection,
 ) -> None:
     repository = SaleRepository(connection)
-    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=UTC))
+    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE))
     saved_sale = repository.save_sale(sale)
 
     assert saved_sale.id is not None
     assert repository.read_sale(saved_sale.id) == saved_sale
+
+
+def test_save_sale_stores_created_at_as_iso_string_with_offset_seconds(
+    connection: sqlite3.Connection,
+) -> None:
+    repository = SaleRepository(connection)
+    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, 30, 123456, tzinfo=POLAND_TIME_ZONE))
+
+    saved_sale = repository.save_sale(sale)
+
+    row = connection.execute(
+        "SELECT created_at FROM sales WHERE id = ?",
+        (saved_sale.id,),
+    ).fetchone()
+    assert row["created_at"] == "2026-06-23T12:00:30+02:00"
+    assert saved_sale.created_at == datetime(2026, 6, 23, 12, 0, 30, tzinfo=POLAND_TIME_ZONE)
 
 
 def test_read_sale_returns_none_for_missing_sale(
@@ -102,9 +121,13 @@ def test_list_recent_sales_returns_newest_first_with_limit(
     connection: sqlite3.Connection,
 ) -> None:
     repository = SaleRepository(connection)
-    older = repository.save_sale(mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=UTC)))
+    older = repository.save_sale(
+        mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE))
+    )
     newer = repository.save_sale(
-        mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=UTC) + timedelta(minutes=5))
+        mixed_sale(
+            datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE) + timedelta(minutes=5)
+        )
     )
 
     assert repository.list_recent_sales(limit=1) == [newer]
@@ -117,7 +140,7 @@ def test_save_sale_rejects_sale_without_items(
     repository = SaleRepository(connection)
     sale = Sale(
         id=None,
-        created_at=datetime(2026, 6, 23, 12, 0, tzinfo=UTC),
+        created_at=datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE),
         raw_total_grosze=0,
         rounded_total_grosze=0,
         paid_grosze=0,
@@ -150,7 +173,7 @@ def test_save_sale_rolls_back_sale_when_saving_items_fails(
     )
     connection.commit()
     repository = SaleRepository(connection)
-    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=UTC))
+    sale = mixed_sale(datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE))
 
     with pytest.raises(sqlite3.IntegrityError):
         repository.save_sale(sale)

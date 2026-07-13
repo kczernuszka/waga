@@ -14,6 +14,7 @@ from cash_assistant.controller.labels import (
     UNIT_PIECE_TEXT,
     UNIT_PRICE_TEXT_SEPARATOR,
 )
+from cash_assistant.controller.time import POLAND_TIME_ZONE
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import Sale, SaleItem
@@ -302,7 +303,7 @@ def _format_unit_price(price_grosze: int, unit_text: str) -> str:
 
 
 def _format_datetime(value: datetime) -> str:
-    return value.strftime(DATETIME_TEXT_FORMAT)
+    return value.astimezone(POLAND_TIME_ZONE).strftime(DATETIME_TEXT_FORMAT)
 
 
 def _require_sale_id(sale: Sale) -> int:
