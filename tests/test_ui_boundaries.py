@@ -2,6 +2,7 @@ import ast
 from pathlib import Path
 
 from cash_assistant.main import build_development_controller
+from cash_assistant.ui.settings_screen import _parse_price_grosze
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UI_PATH = PROJECT_ROOT / "src" / "cash_assistant" / "ui"
@@ -50,12 +51,33 @@ def test_sales_screen_paid_input_accepts_comma_text() -> None:
     assert "Command.DECIMAL_SEPARATOR_TYPED" in source
 
 
+def test_settings_screen_uses_controller_dtos_for_product_editing() -> None:
+    source = (UI_PATH / "settings_screen.py").read_text(encoding="utf-8")
+
+    assert "list_products_for_settings()" in source
+    assert "prepare_product_edit_view_state(product_id)" in source
+    assert "save_product_from_input(product_input)" in source
+    assert "ProductEditInput(" in source
+
+
+def test_settings_screen_price_parser_accepts_comma_text() -> None:
+    assert _parse_price_grosze("0") == 0
+    assert _parse_price_grosze("1") == 100
+    assert _parse_price_grosze("1,20") == 120
+    assert _parse_price_grosze("0,05") == 5
+    assert _parse_price_grosze("1,2") == 120
+
+
 def test_main_window_installs_global_event_filter_for_sales_screen() -> None:
     source = (UI_PATH / "main_window.py").read_text(encoding="utf-8")
 
     assert "installEventFilter(self)" in source
     assert "def eventFilter(" in source
-    assert "self.centralWidget() is self._sales_screen" in source
+    assert "QStackedWidget" in source
+    assert "setCentralWidget(self._screen_stack)" in source
+    assert "setCentralWidget(self._sales_screen)" not in source
+    assert "setCentralWidget(self._settings_screen)" not in source
+    assert "self._screen_stack.currentWidget() is self._sales_screen" in source
     assert "handle_global_key_event(event)" in source
 
 
