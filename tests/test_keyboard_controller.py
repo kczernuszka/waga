@@ -7,8 +7,7 @@ import pytest
 
 from cash_assistant.controller.app_controller import AppController, AppState
 from cash_assistant.controller.keyboard_controller import Command, KeyboardController
-from cash_assistant.core.cart import CartItem
-from cash_assistant.core.product import Product, UnitType
+from cash_assistant.controller.view_state import ProductEditInput, SaleDetailsViewState, ViewState
 from cash_assistant.data.database import connect, initialize_schema
 from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
@@ -47,27 +46,51 @@ def app_controller(
 
 @pytest.fixture
 def keyboard_controller(app_controller: AppController) -> KeyboardController:
-    app_controller.create_product(weighted_product())
-    app_controller.create_product(piece_product())
+    create_weighted_product(app_controller, name="Apples", price_grosze=699)
+    create_piece_product(app_controller, name="Roll", price_grosze=120)
     return KeyboardController(app_controller=app_controller)
 
 
-def weighted_product() -> Product:
-    return Product(
-        id=1,
-        name="Jabłka",
-        unit_type=UnitType.KG,
-        price_grosze=699,
+def create_weighted_product(
+    app_controller: AppController,
+    *,
+    name: str = "Apples",
+    price_grosze: int = 699,
+    sort_order: int = 0,
+) -> int:
+    view_state = app_controller.save_product_from_input(
+        ProductEditInput(
+            product_id=None,
+            name=name,
+            unit_code="kg",
+            price_grosze=price_grosze,
+            sort_order=sort_order,
+        )
     )
+    product_id = view_state.product_id
+    assert product_id is not None
+    return product_id
 
 
-def piece_product() -> Product:
-    return Product(
-        id=2,
-        name="Bułka",
-        unit_type=UnitType.PIECE,
-        price_grosze=120,
+def create_piece_product(
+    app_controller: AppController,
+    *,
+    name: str = "Roll",
+    price_grosze: int = 120,
+    sort_order: int = 0,
+) -> int:
+    view_state = app_controller.save_product_from_input(
+        ProductEditInput(
+            product_id=None,
+            name=name,
+            unit_code="piece",
+            price_grosze=price_grosze,
+            sort_order=sort_order,
+        )
     )
+    product_id = view_state.product_id
+    assert product_id is not None
+    return product_id
 
 
 def test_digit_in_product_selection_selects_weighted_product(
@@ -79,14 +102,10 @@ def test_digit_in_product_selection_selects_weighted_product(
 
     result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
 
-    assert result == CartItem(
-        product_id=1,
-        product_name_snapshot="Jabłka",
-        unit_type_snapshot=UnitType.KG,
-        unit_price_grosze_snapshot=699,
-        quantity_value=1_500,
-        line_total_grosze=1_049,
-    )
+    assert isinstance(result, ViewState)
+    assert result.cart_items[0].product_name == "Apples"
+    assert result.cart_items[0].quantity_text == "1,50 kg"
+    assert result.cart_items[0].line_total_text == "10,49 zł"
     assert app_controller.prepare_view_state().app_state is AppState.CART_REVIEW
 
 
@@ -103,14 +122,10 @@ def test_select_piece_product_enters_quantity_then_confirm_adds_item(
     keyboard_controller.handle(Command.BACKSPACE)
     result = keyboard_controller.handle(Command.CONFIRM)
 
-    assert result == CartItem(
-        product_id=2,
-        product_name_snapshot="Bułka",
-        unit_type_snapshot=UnitType.PIECE,
-        unit_price_grosze_snapshot=120,
-        quantity_value=1,
-        line_total_grosze=120,
-    )
+    assert isinstance(result, ViewState)
+    assert result.cart_items[0].product_name == "Roll"
+    assert result.cart_items[0].quantity_text == "1 szt."
+    assert result.cart_items[0].line_total_text == "1,20 zł"
     assert app_controller.prepare_view_state().app_state is AppState.CART_REVIEW
 
 
@@ -123,7 +138,7 @@ def test_select_product_command_accepts_product_id_payload(
 
     keyboard_controller.handle(Command.SELECT_PRODUCT, 1)
 
-    assert app_controller.cart.technical_total_grosze == 1_398
+    assert app_controller.prepare_view_state().technical_total_grosze == 1_398
 
 
 def test_select_product_command_rejects_non_id_payload(
@@ -137,65 +152,53 @@ def test_keyboard_shortcut_maps_to_correct_product_id_from_view_state(
     app_controller: AppController,
     scale: MockScale,
 ) -> None:
-    app_controller.create_product(
-        Product(
-            id=None,
-            name="Apple",
-            unit_type=UnitType.KG,
-            price_grosze=699,
-            sort_order=20,
-        )
+    create_weighted_product(
+        app_controller,
+        name="Apple",
+        price_grosze=699,
+        sort_order=20,
     )
-    first_slot_product = app_controller.create_product(
-        Product(
-            id=None,
-            name="Gruszki",
-            unit_type=UnitType.KG,
-            price_grosze=899,
-            sort_order=10,
-        )
+    first_slot_product_id = create_weighted_product(
+        app_controller,
+        name="Pears",
+        price_grosze=899,
+        sort_order=10,
     )
     keyboard_controller = KeyboardController(app_controller=app_controller)
     scale.set_weight_grams(1_000)
 
     result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
 
-    assert isinstance(result, CartItem)
-    assert result.product_id == first_slot_product.id
-    assert result.product_name_snapshot == "Gruszki"
+    assert isinstance(result, ViewState)
+    assert result.cart_items[0].product_id == first_slot_product_id
+    assert result.cart_items[0].product_name == "Pears"
 
 
 def test_shortcut_number_is_not_treated_as_product_id(
     app_controller: AppController,
     scale: MockScale,
 ) -> None:
-    product_with_id_1 = app_controller.create_product(
-        Product(
-            id=None,
-            name="Apple",
-            unit_type=UnitType.KG,
-            price_grosze=699,
-            sort_order=20,
-        )
+    product_with_id_1 = create_weighted_product(
+        app_controller,
+        name="Apple",
+        price_grosze=699,
+        sort_order=20,
     )
-    first_slot_product = app_controller.create_product(
-        Product(
-            id=None,
-            name="Gruszki",
-            unit_type=UnitType.KG,
-            price_grosze=899,
-            sort_order=10,
-        )
+    first_slot_product_id = create_weighted_product(
+        app_controller,
+        name="Pears",
+        price_grosze=899,
+        sort_order=10,
     )
     keyboard_controller = KeyboardController(app_controller=app_controller)
     scale.set_weight_grams(1_000)
 
     result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
 
-    assert isinstance(result, CartItem)
-    assert product_with_id_1.id == 1
-    assert first_slot_product.id == 2
-    assert result.product_id == first_slot_product.id
+    assert isinstance(result, ViewState)
+    assert product_with_id_1 == 1
+    assert first_slot_product_id == 2
+    assert result.cart_items[0].product_id == first_slot_product_id
 
 
 def test_start_payment_and_digits_calculate_change(
@@ -240,7 +243,6 @@ def test_payment_buffer_accepts_decimal_separator(
 def test_save_sale_command_uses_app_controller_and_repository(
     app_controller: AppController,
     keyboard_controller: KeyboardController,
-    connection: sqlite3.Connection,
     scale: MockScale,
 ) -> None:
     scale.set_weight_grams(1_500)
@@ -251,8 +253,9 @@ def test_save_sale_command_uses_app_controller_and_repository(
 
     saved_sale = keyboard_controller.handle(Command.SAVE_SALE)
 
-    assert SaleRepository(connection).read_sale(1) == saved_sale
-    assert app_controller.cart.is_empty
+    assert isinstance(saved_sale, SaleDetailsViewState)
+    assert app_controller.read_sale_details(saved_sale.sale_id) == saved_sale
+    assert app_controller.prepare_view_state().is_cart_empty
     assert app_controller.prepare_view_state().app_state is AppState.PRODUCT_SELECTION
 
 
@@ -267,14 +270,15 @@ def test_remove_last_and_clear_cart_commands(
     keyboard_controller.handle(Command.DIGIT_TYPED, "3")
     keyboard_controller.handle(Command.CONFIRM)
 
-    removed = keyboard_controller.handle(Command.REMOVE_LAST_ITEM)
+    removed_view_state = keyboard_controller.handle(Command.REMOVE_LAST_ITEM)
 
-    assert isinstance(removed, CartItem)
-    assert app_controller.cart.technical_total_grosze == 1_049
+    assert isinstance(removed_view_state, ViewState)
+    assert removed_view_state.technical_total_grosze == 1_049
 
-    keyboard_controller.handle(Command.CLEAR_CART)
+    cleared_view_state = keyboard_controller.handle(Command.CLEAR_CART)
 
-    assert app_controller.cart.is_empty
+    assert cleared_view_state is None
+    assert app_controller.prepare_view_state().is_cart_empty
 
 
 def test_cancel_exits_current_input_without_clearing_cart(

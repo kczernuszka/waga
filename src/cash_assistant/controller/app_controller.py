@@ -57,28 +57,6 @@ class AppController:
         self._payment: PaymentState | None = None
         self._selected_piece_product_id: int | None = None
 
-    @property
-    def cart(self) -> Cart:
-        return self._cart
-
-    def list_active_products(self) -> list[Product]:
-        return self._require_product_repository().list_active_products()
-
-    def list_all_products(self) -> list[Product]:
-        return self._require_product_repository().list_all_products()
-
-    def get_product(self, product_id: int) -> Product | None:
-        return self._require_product_repository().get_product(product_id)
-
-    def create_product(self, product: Product) -> Product:
-        return self._require_product_repository().create_product(product)
-
-    def update_product(self, product: Product) -> Product:
-        return self._require_product_repository().update_product(product)
-
-    def deactivate_product(self, product_id: int) -> None:
-        self._require_product_repository().deactivate_product(product_id)
-
     def list_products_for_settings(self) -> list[ProductListItemViewState]:
         return [
             build_product_list_item_view_state(product)
@@ -117,80 +95,60 @@ class AppController:
 
         return build_product_edit_view_state(saved_product)
 
-    def add_weighted_product(self, product: Product) -> CartItem:
-        self._clear_selected_piece_product()
-        item = self._cart.add_weighted_product(
-            product,
-            weight_grams=self._scale.get_weight_grams(),
-        )
-        self._reset_payment()
-        self._state = AppState.CART_REVIEW
-        return item
-
-    def add_piece_product(self, product: Product, quantity: int) -> CartItem:
-        self._clear_selected_piece_product()
-        item = self._cart.add_piece_product(product, quantity=quantity)
-        self._reset_payment()
-        self._state = AppState.CART_REVIEW
-        return item
-
-    def select_product_by_id(self, product_id: int) -> CartItem | None:
+    def select_product_by_id(self, product_id: int) -> ViewState:
         product = self._require_active_product(product_id)
 
         if product.unit_type is UnitType.KG:
-            return self.add_weighted_product(product)
+            self._add_weighted_product(product)
+            return self.prepare_view_state()
 
         self._reset_payment()
         self._selected_piece_product_id = product_id
         self._state = AppState.ENTERING_QUANTITY
-        return None
+        return self.prepare_view_state()
 
-    def add_piece_product_by_id(self, product_id: int, quantity: int) -> CartItem:
-        product = self._require_active_product(product_id)
-        return self.add_piece_product(product, quantity=quantity)
-
-    def add_selected_piece_product(self, quantity: int) -> CartItem:
+    def add_selected_piece_product(self, quantity: int) -> ViewState:
         if self._selected_piece_product_id is None:
             raise ValueError("no piece product selected")
-        return self.add_piece_product_by_id(
-            self._selected_piece_product_id,
-            quantity=quantity,
-        )
+        product = self._require_active_product(self._selected_piece_product_id)
+        self._add_piece_product(product, quantity=quantity)
+        return self.prepare_view_state()
 
-    def remove_last_item(self) -> CartItem | None:
-        item = self._cart.remove_last_item()
+    def remove_last_item(self) -> ViewState:
+        self._cart.remove_last_item()
         self._reset_payment()
         self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
-        return item
+        return self.prepare_view_state()
 
-    def clear_cart(self) -> None:
+    def clear_cart(self) -> ViewState:
         self._cart.clear()
         self._reset_payment()
         self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION
+        return self.prepare_view_state()
 
-    def start_quantity_entry(self) -> None:
-        self._reset_payment()
-        self._state = AppState.ENTERING_QUANTITY
-
-    def start_payment(self) -> None:
+    def start_payment(self) -> ViewState:
         if self._cart.is_empty:
             raise ValueError("cannot start payment with empty cart")
         self._reset_payment()
         self._clear_selected_piece_product()
         self._state = AppState.PAYMENT
+        return self.prepare_view_state()
 
-    def cancel_current_operation(self) -> None:
+    def cancel_current_operation(self) -> ViewState:
         self._reset_payment()
         self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
+        return self.prepare_view_state()
 
-    def open_settings(self) -> None:
+    def open_settings(self) -> ViewState:
         self._state = AppState.SETTINGS
+        return self.prepare_view_state()
 
-    def open_history(self) -> None:
+    def open_history(self) -> ViewState:
         self._state = AppState.HISTORY
+        return self.prepare_view_state()
 
     def set_paid_grosze(self, paid_grosze: int) -> PaymentState:
         if self._state is not AppState.PAYMENT:
@@ -217,7 +175,7 @@ class AppController:
 
         return self._payment
 
-    def save_sale(self) -> Sale:
+    def save_sale(self) -> SaleDetailsViewState:
         if self._cart.is_empty:
             raise ValueError("cannot save sale from empty cart")
         if self._payment is None:
@@ -231,17 +189,12 @@ class AppController:
             created_at=self._clock(),
         )
         saved_sale = self._sale_repository.save_sale(sale)
+        sale_details = build_sale_details_view_state(saved_sale)
         self._cart = Cart()
         self._reset_payment()
         self._clear_selected_piece_product()
         self._state = AppState.PRODUCT_SELECTION
-        return saved_sale
-
-    def list_recent_sales(self, limit: int = 20) -> list[Sale]:
-        return self._sale_repository.list_recent_sales(limit=limit)
-
-    def read_sale(self, sale_id: int) -> Sale | None:
-        return self._sale_repository.read_sale(sale_id)
+        return sale_details
 
     def list_sales_for_history(self, limit: int = 20) -> list[SaleSummaryViewState]:
         return [
@@ -285,6 +238,23 @@ class AppController:
 
     def _clear_selected_piece_product(self) -> None:
         self._selected_piece_product_id = None
+
+    def _add_weighted_product(self, product: Product) -> CartItem:
+        self._clear_selected_piece_product()
+        item = self._cart.add_weighted_product(
+            product,
+            weight_grams=self._scale.get_weight_grams(),
+        )
+        self._reset_payment()
+        self._state = AppState.CART_REVIEW
+        return item
+
+    def _add_piece_product(self, product: Product, quantity: int) -> CartItem:
+        self._clear_selected_piece_product()
+        item = self._cart.add_piece_product(product, quantity=quantity)
+        self._reset_payment()
+        self._state = AppState.CART_REVIEW
+        return item
 
     def _require_product_repository(self) -> ProductRepository:
         if self._product_repository is None:
