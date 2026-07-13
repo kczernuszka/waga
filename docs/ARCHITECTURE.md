@@ -1,563 +1,356 @@
-## `docs/ARCHITECTURE.md`
-
 # Architecture
 
 ## Przegląd
 
-Projekt jest lokalną aplikacją desktopową w Pythonie, uruchamianą docelowo na Raspberry Pi z ekranem HDMI.
+Projekt jest lokalną aplikacją desktopową w Pythonie, docelowo uruchamianą na Raspberry Pi z ekranem HDMI.
 
 Aplikacja używa:
 
-- PySide6 do GUI
-- SQLite do lokalnej bazy danych
-- czystej logiki domenowej w `core/`
-- adapterów sprzętowych w `hardware/`
-- kontrolerów aplikacyjnych w `controller/`
+- PySide6 do GUI, jeszcze niezaimplementowanego,
+- SQLite do lokalnej bazy danych,
+- czystej logiki domenowej w `core/`,
+- adapterów sprzętowych w `hardware/`,
+- kontrolerów i warstwy prezentacyjnej w `controller/`.
 
-Główna zasada architektury:
+Główna zasada:
 
-core nie wie nic o GUI, bazie danych ani sprzęcie
+`core/` nie wie nic o GUI, bazie danych ani sprzęcie.
 
 ## Warstwy
-ui/
-  PySide6 widgets, okna, ekrany
 
-controller/
-  obsługa komend użytkownika, maszyna stanów aplikacji
+`core/`
 
-core/
-  logika domenowa: pieniądze, produkty, koszyk, sprzedaż
+Logika domenowa: pieniądze, produkty, koszyk i zakończona sprzedaż. Ta warstwa operuje na modelach domenowych i liczbach całkowitych.
 
-data/
-  SQLite, repozytoria, zapis/odczyt
+`data/`
 
-hardware/
-  waga, mock wagi, przyszłe urządzenia zewnętrzne
+SQLite, schemat bazy i repozytoria. Repozytoria mapują dane między SQLite a modelami domenowymi.
+
+`hardware/`
+
+Interfejs wagi i mock wagi. Przyszłe adaptery prawdziwego sprzętu powinny zostać w tej warstwie.
+
+`controller/`
+
+Fasada aplikacyjna dla GUI, obsługa komend, stan aplikacji oraz budowanie DTO/ViewState z gotowymi tekstami dla GUI.
+
+`ui/`
+
+Docelowe ekrany PySide6. UI ma renderować DTO/ViewState i wysyłać komendy/akcje do kontrolera. UI nie powinno importować modeli domenowych.
+
 ## Kierunek zależności
 
-Dozwolone zależności:
+Dozwolone:
 
-ui -> controller
-controller -> core
-controller -> data
-controller -> hardware
-data -> core
-hardware -> core lub brak zależności
+- `ui -> controller`
+- `controller -> core`
+- `controller -> data`
+- `controller -> hardware`
+- `data -> core`
+- `hardware -> brak zależności od domeny` albo minimalnie do typów wspólnych, jeśli będzie to potrzebne
 
-Niedozwolone zależności:
+Niedozwolone:
 
-core -> ui
-core -> data
-core -> hardware
-data -> ui
-hardware -> ui
+- `core -> ui`
+- `core -> data`
+- `core -> hardware`
+- `data -> ui`
+- `hardware -> ui`
+- `ui -> core`
 
-## Struktura katalogów
-src/
-  cash_assistant/
-    __init__.py
-    main.py
+## Aktualna struktura
 
-    core/
-      __init__.py
-      money.py
-      product.py
-      cart.py
-      sale.py
+```text
+src/cash_assistant/
+  main.py
 
-    data/
-      __init__.py
-      database.py
-      product_repository.py
-      sale_repository.py
+  core/
+    money.py
+    product.py
+    cart.py
+    sale.py
 
-    hardware/
-      __init__.py
-      scale.py
-      mock_scale.py
+  data/
+    database.py
+    product_repository.py
+    sale_repository.py
 
-    controller/
-      __init__.py
-      app_controller.py
-      keyboard_controller.py
-      view_state.py
+  hardware/
+    scale.py
+    mock_scale.py
 
-    ui/
-      __init__.py
-      formatters.py
-      main_window.py
-      sales_screen.py
-      settings_screen.py
-      history_screen.py
+  controller/
+    app_controller.py
+    keyboard_controller.py
+    labels.py
+    view_state.py
 
-## Moduł core
+  ui/
+    formatters.py
+    main_window.py
+    sales_screen.py
+    settings_screen.py
+    history_screen.py
+```
 
-core zawiera czystą logikę domenową.
+`main.py` oraz ekrany w `ui/` są jeszcze stubami przed implementacją PySide6.
 
-Nie wolno tutaj importować PySide6, sqlite3, GPIO ani klas GUI.
+## `core/`
 
-money.py
+### `money.py`
 
 Odpowiedzialność:
 
-- czysta logika obliczeń na pieniądzach reprezentowanych jako `int` w groszach
-- liczenie wartości pozycji ważonej
-- liczenie wartości pozycji na sztuki
-- zaokrąglanie końcowej kwoty
-- liczenie reszty
+- obliczenia na pieniądzach reprezentowanych jako `int` w groszach,
+- liczenie wartości pozycji ważonej,
+- liczenie wartości pozycji na sztuki,
+- zaokrąglanie sumy do najbliższych 50 groszy,
+- liczenie reszty.
 
-Wymagane funkcje:
+`money.py` nie formatuje tekstów i nie parsuje tekstu użytkownika.
 
-def calculate_weighted_line_total_grosze(
-    unit_price_grosze: int,
-    weight_grams: int,
-) -> int:
-    ...
+Aktualne funkcje:
 
-def calculate_piece_line_total_grosze(
-    unit_price_grosze: int,
-    quantity: int,
-) -> int:
-    ...
-
-def round_to_nearest_50_grosze(amount_grosze: int) -> int:
-    ...
-
-def calculate_change(paid_grosze: int, total_grosze: int) -> int:
-    ...
+- `calculate_weighted_line_total_grosze(unit_price_grosze, weight_grams)`
+- `calculate_piece_line_total_grosze(unit_price_grosze, quantity)`
+- `round_to_nearest_50_grosze(amount_grosze)`
+- `calculate_change(paid_grosze, total_grosze)`
 
 Zasady:
 
-- wejściem i wyjściem są liczby całkowite w groszach
-- waga jest reprezentowana jako `int` w gramach
-- nie używać float
-- nie formatować tekstów dla GUI
-- nie parsować tekstów wpisywanych przez użytkownika
-- błędne dane wejściowe powinny zgłaszać ValueError
+- pieniądze to zawsze `int` w groszach,
+- waga to zawsze `int` w gramach,
+- nie używać `float`,
+- błędne wartości liczbowe zgłaszają `ValueError`.
 
-Formatowanie pieniędzy i ilości do tekstów widocznych w GUI nie należy do `core/money.py`.
-Teksty dla GUI są przygotowywane poza `core`, w warstwie prezentacji/kontrolera oraz pomocniczo
-w `ui/formatters.py`.
+### `product.py`
 
-product.py
+Model domenowy produktu:
 
-Odpowiedzialność:
+- `Product`
+- `UnitType.KG`
+- `UnitType.PIECE`
 
-- reprezentacja produktu
-- jednostka sprzedaży
-- cena
+Produkt ma:
 
-Przykładowe typy:
+- `id: int | None`
+- `name: str`
+- `unit_type: UnitType`
+- `price_grosze: int`
+- `active: bool`
+- `sort_order: int`
 
-from dataclasses import dataclass
-from enum import Enum
+### `cart.py`
 
+Koszyk przechowuje bieżące pozycje sprzedaży.
 
-class UnitType(Enum):
-    KG = "kg"
-    PIECE = "piece"
-
-
-@dataclass(frozen=True)
-class Product:
-    id: int | None
-    name: str
-    unit_type: UnitType
-    price_grosze: int
-    active: bool = True
-    sort_order: int = 0
-
-cart.py
-
-Odpowiedzialność:
-
-- pozycje koszyka
-- dodawanie pozycji
-- usuwanie pozycji
-- czyszczenie koszyka
-- liczenie sumy technicznej
-- liczenie sumy końcowej
-
-Pozycja koszyka musi przechowywać snapshot produktu:
-
-@dataclass(frozen=True)
-class CartItem:
-    product_id: int | None
-    product_name_snapshot: str
-    unit_type_snapshot: UnitType
-    unit_price_grosze_snapshot: int
-    quantity_value: int
-    line_total_grosze: int
-
-Dla kilogramów quantity_value oznacza gramy.
-
-Dla sztuk quantity_value oznacza liczbę sztuk.
-
-sale.py
-
-Odpowiedzialność:
-
-- reprezentacja zakończonej sprzedaży
-- dane zapisywane do historii
-- pozycje sprzedaży
-
-Sprzedaż powinna przechowywać:
-
-- datę i godzinę
-- sumę techniczną
-- sumę po zaokrągleniu
-- kwotę otrzymaną
-- resztę
-- pozycje sprzedaży
-
-Moduł data
-
-data odpowiada za SQLite.
-
-Na etapie MVP nie używać ORM.
-
-database.py
-
-Odpowiedzialność:
-
-- otwarcie połączenia SQLite
-- inicjalizacja schematu
-- migracje MVP, jeśli będą potrzebne
-- transakcje
-
-Minimalny schemat:
-
-CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    unit_type TEXT NOT NULL,
-    price_grosze INTEGER NOT NULL,
-    active INTEGER NOT NULL DEFAULT 1,
-    sort_order INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS sales (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL,
-    raw_total_grosze INTEGER NOT NULL,
-    rounded_total_grosze INTEGER NOT NULL,
-    paid_grosze INTEGER NOT NULL,
-    change_grosze INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS sale_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sale_id INTEGER NOT NULL,
-    product_id INTEGER,
-    product_name_snapshot TEXT NOT NULL,
-    unit_type_snapshot TEXT NOT NULL,
-    unit_price_grosze_snapshot INTEGER NOT NULL,
-    quantity_value INTEGER NOT NULL,
-    line_total_grosze INTEGER NOT NULL,
-    FOREIGN KEY (sale_id) REFERENCES sales(id)
-);
-
-## Repozytoria
-
-Repozytoria izolują resztę aplikacji od SQL.
-
-Wymagane repozytoria MVP:
-
-ProductRepository
-SaleRepository
-
-ProductRepository:
-
-- list active products
-- list all products
-- create product
-- update product
-- deactivate product
-
-SaleRepository:
-
-- save sale
-- list recent sales
-- read sale details
-
-Moduł hardware
-
-hardware odpowiada za sprzęt.
-
-Na początku wymagany jest tylko mock wagi.
-
-scale.py
-
-Interfejs wagi:
-
-from abc import ABC, abstractmethod
-
-
-class Scale(ABC):
-    @abstractmethod
-    def get_weight_grams(self) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
-    def tare(self) -> None:
-        raise NotImplementedError
-
-mock_scale.py
-
-Mock wagi:
-
-class MockScale(Scale):
-    def __init__(self) -> None:
-        self._weight_grams = 0
-
-    def set_weight_grams(self, weight_grams: int) -> None:
-        if weight_grams < 0:
-            raise ValueError("weight_grams cannot be negative")
-        self._weight_grams = weight_grams
-
-    def get_weight_grams(self) -> int:
-        return self._weight_grams
-
-    def tare(self) -> None:
-        self._weight_grams = 0
-
-Docelowo można dodać:
-
-real_scale.py
-
-ale nie implementować go w MVP bez konkretnego modelu wagi.
-
-Moduł controller
-
-controller odpowiada za logikę aplikacyjną i przejścia między stanami.
-
-controller przygotowuje dane dla GUI w postaci prostych DTO/ViewState.
-GUI nie powinno samodzielnie składać danych domenowych ani formatować jednostek na podstawie `UnitType`.
-Przykładowe DTO:
-
-- `ProductViewState`
-- `CartItemViewState`
-- `ViewState`
-
-Produkty przekazywane do GUI powinny zawierać gotowe pola tekstowe:
+`CartItem` jest snapshotem produktu:
 
 - `product_id`
-- `name`
-- `price_text`
-- `unit_text`
-- `button_text`
+- `product_name_snapshot`
+- `unit_type_snapshot`
+- `unit_price_grosze_snapshot`
+- `quantity_value`
+- `line_total_grosze`
 
-Stany aplikacji
+Dla `UnitType.KG` pole `quantity_value` oznacza gramy.
 
-Minimalne stany:
+Dla `UnitType.PIECE` pole `quantity_value` oznacza liczbę sztuk.
 
-PRODUCT_SELECTION
-ENTERING_QUANTITY
-READING_WEIGHT
-CART_REVIEW
-PAYMENT
-SETTINGS
-HISTORY
-Komendy
+### `sale.py`
 
-GUI i klawiatura powinny generować te same komendy.
+`Sale` reprezentuje zakończoną sprzedaż. Powstaje z koszyka oraz kwoty otrzymanej od klienta.
 
-Przykładowe komendy:
+`SaleItem` jest snapshotem pozycji koszyka. Zmiana produktu po sprzedaży nie zmienia historii sprzedaży.
 
-SELECT_PRODUCT
-DIGIT_TYPED
-DECIMAL_SEPARATOR_TYPED
-CONFIRM
-CANCEL
-BACKSPACE
-REMOVE_LAST_ITEM
-CLEAR_CART
-START_PAYMENT
-SAVE_SALE
-OPEN_SETTINGS
-OPEN_HISTORY
-Zasada
+## `data/`
 
-Nie wolno pisać osobnej logiki dla kliknięcia GUI i osobnej logiki dla klawisza.
+`data/` odpowiada za SQLite i nie zawiera logiki GUI.
 
-Poprawnie:
-
-button click -> command -> controller
-key press    -> command -> controller
-
-Niepoprawnie:
-
-button click -> jedna ścieżka logiki
-key press    -> druga skopiowana ścieżka logiki
-
-## Moduł ui
-
-ui odpowiada za PySide6.
-
-ui odpowiada za wyświetlanie i zdarzenia użytkownika.
-Nie powinno importować `core/` ani znać modeli domenowych takich jak `Product`, `CartItem`,
-`Sale` czy `UnitType`.
-
-Ekrany GUI powinny dostawać gotowy `ViewState` z `controller/` i emitować komendy do kontrolera.
-
-formatters.py
+### `database.py`
 
 Odpowiedzialność:
 
-- proste formatowanie prymitywów do tekstów UI, np. groszy, gramów, ilości sztuk
-- brak zależności od `core/`
+- otwieranie połączenia SQLite,
+- inicjalizacja schematu,
+- pomocniczy kontekst transakcji.
 
-Przykłady:
+Tabele MVP:
 
-def format_money(grosze: int) -> str:
-    ...
+- `products`
+- `sales`
+- `sale_items`
 
-def format_weight_grams(weight_grams: int) -> str:
-    ...
+### `product_repository.py`
 
-def format_piece_quantity(quantity: int) -> str:
-    ...
+Repozytorium produktów obsługuje:
 
-def format_unit_price(price_grosze: int, unit_text: str) -> str:
-    ...
+- listowanie aktywnych produktów,
+- listowanie wszystkich produktów,
+- odczyt produktu,
+- tworzenie produktu,
+- aktualizację produktu,
+- dezaktywację produktu.
 
-Formatowanie wymagające znajomości `UnitType` powinno być wykonane w warstwie
-controller/presentation, np. podczas budowania `ProductViewState` lub `CartItemViewState`.
+Repozytorium zwraca i przyjmuje modele domenowe, ponieważ należy do warstwy `data`, a nie do GUI.
 
-main_window.py
+### `sale_repository.py`
 
-Główne okno aplikacji.
+Repozytorium sprzedaży obsługuje:
 
-Odpowiedzialność:
+- zapis sprzedaży,
+- listę ostatnich sprzedaży,
+- odczyt szczegółów sprzedaży.
 
-- tworzy główny layout
-- przełącza ekrany
-- przekazuje zdarzenia do kontrolera
-- odświeża widok na podstawie stanu aplikacji
+Zapis sprzedaży jest transakcyjny. Jeśli zapis pozycji sprzedaży się nie powiedzie, rekord `sales` nie powinien zostać w bazie.
 
-sales_screen.py
+## `hardware/`
 
-Ekran sprzedaży.
+### `scale.py`
 
-Pokazuje:
+Definiuje abstrakcyjny interfejs:
 
-- przyciski produktów
-- koszyk
-- sumę techniczną
-- sumę po zaokrągleniu
-- kwotę otrzymaną
-- resztę
-- aktualny tryb
+- `get_weight_grams() -> int`
+- `tare() -> None`
 
-settings_screen.py
+### `mock_scale.py`
 
-Ekran ustawień produktów.
+Mock wagi używany w developmentcie i testach.
 
-Pozwala:
+Umożliwia:
 
-- dodać produkt
-- edytować produkt
-- zmienić cenę
-- zmienić jednostkę
-- dezaktywować produkt
+- ustawienie masy testowej w gramach,
+- odczyt masy,
+- tarowanie.
 
-history_screen.py
+## `controller/`
 
-Ekran historii.
+`controller/` jest granicą między GUI a domeną.
 
-Pokazuje:
+### `app_controller.py`
 
-- ostatnie sprzedaże
-- szczegóły sprzedaży
-- sumy
-- pozycje
+`AppController` jest publiczną fasadą dla GUI.
 
-## Obsługa klawiatury
+Publiczne metody `AppController` nie powinny przyjmować ani zwracać modeli domenowych takich jak `Product`, `UnitType`, `Cart`, `CartItem`, `Sale` czy `SaleItem`.
 
-PySide6 może obsługiwać skróty przez:
+Publiczne API:
 
-- QShortcut
-- QAction
-- keyPressEvent
-- eventFilter
+- `list_products_for_settings() -> list[ProductListItemViewState]`
+- `prepare_product_edit_view_state(product_id: int | None = None) -> ProductEditViewState`
+- `save_product_from_input(product_input: ProductEditInput) -> ProductEditViewState`
+- `select_product_by_id(product_id: int) -> ViewState`
+- `add_selected_piece_product(quantity: int) -> ViewState`
+- `remove_last_item() -> ViewState`
+- `clear_cart() -> ViewState`
+- `start_payment() -> ViewState`
+- `cancel_current_operation() -> ViewState`
+- `open_settings() -> ViewState`
+- `open_history() -> ViewState`
+- `set_paid_grosze(paid_grosze: int) -> PaymentState`
+- `save_sale() -> SaleDetailsViewState`
+- `list_sales_for_history(limit: int = 20) -> list[SaleSummaryViewState]`
+- `read_sale_details(sale_id: int) -> SaleDetailsViewState | None`
+- `prepare_view_state() -> ViewState`
 
-Dla aplikacji sprzedażowej preferowany jest centralny handler klawiatury, ponieważ znaczenie klawiszy zależy od aktualnego stanu.
+Modele domenowe są używane tylko wewnątrz kontrolera i w repozytoriach.
 
-Przykład:
+### `keyboard_controller.py`
 
-Klawisz 1:
-- w PRODUCT_SELECTION wybiera produkt nr 1
-- w ENTERING_QUANTITY dopisuje cyfrę 1
-- w PAYMENT dopisuje cyfrę 1 do kwoty otrzymanej
+`KeyboardController` tłumaczy komendy klawiatury na akcje `AppController`.
 
-## Testowanie
-### Testy jednostkowe
+`Command.SELECT_PRODUCT` przyjmuje `product_id`, nie `Product`.
 
-Wymagane dla:
+Skróty numeryczne `1-9` są mapowane z pozycji produktu w `ProductViewState`, a nie traktowane jako `product_id`.
 
-- money.py
-- cart.py
-- sale.py
+### `view_state.py`
 
-### Testy bez sprzętu
+Zawiera DTO/ViewState przygotowane dla GUI:
 
-Cała logika MVP musi działać bez Raspberry Pi i bez prawdziwej wagi.
+Sprzedaż:
 
-Na komputerze developerskim używany jest MockScale.
+- `ViewState`
+- `ProductViewState`
+- `CartItemViewState`
+- `PaymentState`
 
-### Testy bazy
+Ustawienia produktów:
 
-Repozytoria powinny być testowane na tymczasowej bazie SQLite.
+- `ProductListItemViewState`
+- `ProductEditViewState`
+- `ProductEditInput`
+- `UnitOptionViewState`
 
-## Decyzje architektoniczne
+Historia sprzedaży:
 
-Dlaczego Python?
-- szybki development
-- dobra współpraca z Codexem
-- dobry ekosystem dla SQLite, GUI i Raspberry Pi
-- wystarczająca wydajność dla aplikacji sprzedażowej
+- `SaleSummaryViewState`
+- `SaleDetailsViewState`
+- `SaleItemViewState`
 
-Dlaczego PySide6?
-- pełne GUI desktopowe
-- dobre wsparcie skrótów klawiaturowych
-- możliwość działania fullscreen
-- lepszy wygląd i większa elastyczność niż Tkinter
+Buildery ViewState przygotowują gotowe teksty widoczne w GUI. GUI nie powinno formatować jednostek na podstawie `UnitType`.
 
-Dlaczego SQLite?
-- lokalna baza
-- brak serwera
-- stabilność
-- prostota backupu
-- wystarczające dla jednego stanowiska
+### `labels.py`
 
-Dlaczego mock wagi?
-- umożliwia development na PC
-- izoluje sprzęt od logiki
-- pozwala testować aplikację bez Raspberry Pi
-- ułatwia późniejszą wymianę adaptera sprzętowego
+Zawiera GUI-visible stałe tekstowe używane przez warstwę prezentacji:
 
-Zasady dla Codexa
+- tekst waluty,
+- teksty jednostek,
+- statusy produktu,
+- format daty,
+- separatory tekstów prezentacyjnych.
 
-Codex powinien pracować etapami.
+Zasada: nowe napisy widoczne w GUI powinny trafiać do `controller/labels.py` albo innego jawnego modułu presentation, nie jako luźne literały w logice.
 
-Nie generować całej aplikacji naraz.
+## `ui/`
 
-Preferowana kolejność:
+`ui/` odpowiada za PySide6.
 
-1. szkielet projektu
-2. testy dla money.py
-3. implementacja money.py
-4. modele domenowe
-5. testy cart.py
-6. implementacja cart.py
-7. SQLite schema
-8. repozytoria
-9. mock wagi
-10. podstawowe GUI
-11. obsługa klawiatury
-12. ekran ustawień
-13. historia sprzedaży
+Aktualnie ekrany są stubami:
 
-Dla logiki domenowej preferować test-first.
+- `main_window.py`
+- `sales_screen.py`
+- `settings_screen.py`
+- `history_screen.py`
 
-Dla GUI dopuszczalny jest prototype-first.
+Docelowo ekrany mają:
+
+- renderować DTO/ViewState z `controller/`,
+- wywoływać publiczne metody `AppController` albo komendy `KeyboardController`,
+- nie importować `core.Product`, `core.UnitType`, `core.Sale`, `core.SaleItem`.
+
+### `formatters.py`
+
+Zawiera pomocnicze formatowanie prymitywów:
+
+- `format_money`
+- `format_weight_grams`
+- `format_piece_quantity`
+- `format_unit_price`
+
+Nie importuje `core/`. Korzysta z tekstów z `controller/labels.py`.
+
+## Testy
+
+Aktualny zakres testów:
+
+- `test_money.py` — obliczenia pieniędzy,
+- `test_product.py` — model produktu,
+- `test_cart.py` — koszyk,
+- `test_sale.py` — zakończona sprzedaż,
+- `test_database.py` — inicjalizacja bazy,
+- `test_product_repository.py` — repozytorium produktów,
+- `test_sale_repository.py` — repozytorium sprzedaży i transakcyjność,
+- `test_scale.py` — interfejs i mock wagi,
+- `test_formatters.py` — pomocnicze formatowanie UI,
+- `test_view_state.py` — buildery ViewState,
+- `test_app_controller.py` — publiczna fasada GUI,
+- `test_keyboard_controller.py` — komendy klawiatury.
+
+## Kolejny etap
+
+Przed implementacją GUI architektura jest przygotowana do modelu:
+
+```text
+PySide6 screen -> AppController / KeyboardController -> ViewState DTO
+```
+
+GUI powinno pozostać cienką warstwą bez logiki sprzedaży.

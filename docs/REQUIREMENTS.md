@@ -1,31 +1,31 @@
-## `docs/REQUIREMENTS.md`
-
 # Requirements
 
 ## Cel projektu
 
-Celem projektu jest stworzenie pomocniczej aplikacji sprzedażowej działającej na Raspberry Pi. Aplikacja ma ułatwiać sprzedaż warzyw i owoców przez szybkie wybieranie produktów, liczenie ceny, liczenie reszty oraz zapisywanie historii sprzedaży.
+Celem projektu jest stworzenie pomocniczej aplikacji sprzedażowej działającej lokalnie na Raspberry Pi. Aplikacja ma ułatwiać sprzedaż warzyw i owoców przez szybkie wybieranie produktów, liczenie ceny, liczenie reszty oraz zapisywanie historii sprzedaży.
 
 Aplikacja nie jest certyfikowaną kasą fiskalną.
 
 ## Środowisko docelowe
 
-- Raspberry Pi
-- ekran HDMI
-- klawiatura USB lub klawiatura numeryczna
-- opcjonalnie myszka
-- docelowo możliwa integracja z wagą elektroniczną
-- lokalna baza SQLite
-- praca offline
+- Raspberry Pi,
+- ekran HDMI,
+- klawiatura USB albo klawiatura numeryczna,
+- opcjonalnie myszka,
+- docelowo możliwa integracja z wagą elektroniczną,
+- lokalna baza SQLite,
+- praca offline.
 
 ## Środowisko developerskie
 
-- Windows albo Linux
-- Python 3.11+
-- PySide6
-- SQLite
-- pytest
-- mock wagi zamiast prawdziwego sprzętu
+- Windows albo Linux,
+- Python 3.11+,
+- PySide6 jako docelowe GUI,
+- SQLite,
+- pytest,
+- ruff,
+- mypy,
+- mock wagi zamiast prawdziwego sprzętu.
 
 ## Wymagania funkcjonalne
 
@@ -33,171 +33,201 @@ Aplikacja nie jest certyfikowaną kasą fiskalną.
 
 Aplikacja musi umożliwiać:
 
-- dodawanie produktów
-- edycję produktów
-- dezaktywowanie produktów
-- ustawianie ceny produktu
-- ustawianie jednostki produktu:
-  - kilogramy
-  - sztuki
-- ustawianie kolejności wyświetlania produktów
-- wyświetlanie produktów jako przycisków w GUI
+- dodawanie produktów,
+- edycję produktów,
+- dezaktywowanie produktów,
+- ustawianie ceny produktu,
+- ustawianie jednostki produktu: kilogramy albo sztuki,
+- ustawianie kolejności wyświetlania produktów,
+- wyświetlanie aktywnych produktów jako przycisków w GUI.
 
-Produkt musi mieć co najmniej:
+Produkt zawiera:
 
-- identyfikator
-- nazwę
-- jednostkę sprzedaży
-- cenę w groszach
-- status aktywności
-- kolejność sortowania
+- `id`,
+- `name`,
+- `unit_type`,
+- `price_grosze`,
+- `active`,
+- `sort_order`.
+
+GUI ustawień nie może operować bezpośrednio na `Product` ani `UnitType`. Ma korzystać z DTO:
+
+- `ProductListItemViewState`,
+- `ProductEditViewState`,
+- `ProductEditInput`,
+- `UnitOptionViewState`.
 
 ### Koszyk
 
 Aplikacja musi umożliwiać:
 
-- dodawanie produktu do koszyka
-- usuwanie ostatniej pozycji
-- czyszczenie koszyka
-- wyświetlanie pozycji koszyka
-- liczenie sumy technicznej
-- liczenie sumy końcowej po zaokrągleniu
+- dodawanie produktu ważonego z aktualnej wagi,
+- dodawanie produktu na sztuki z podaną ilością,
+- usuwanie ostatniej pozycji,
+- czyszczenie koszyka,
+- wyświetlanie pozycji koszyka,
+- liczenie sumy technicznej,
+- liczenie sumy końcowej po zaokrągleniu.
 
-Pozycja koszyka musi zawierać:
+Pozycja koszyka zawiera snapshot danych produktu:
 
-- produkt
-- nazwę produktu w momencie sprzedaży
-- cenę produktu w momencie sprzedaży
-- jednostkę produktu w momencie sprzedaży
-- ilość albo wagę
-- wartość pozycji w groszach
+- `product_id`,
+- `product_name_snapshot`,
+- `unit_type_snapshot`,
+- `unit_price_grosze_snapshot`,
+- `quantity_value`,
+- `line_total_grosze`.
+
+Dla kilogramów `quantity_value` oznacza gramy.
+
+Dla sztuk `quantity_value` oznacza liczbę sztuk.
 
 ### Produkty ważone
 
 Dla produktów sprzedawanych na kilogramy:
 
-- waga musi być reprezentowana jako `int` w gramach
-- cena musi być reprezentowana jako `int` w groszach za kilogram
-- wartość pozycji musi być liczona bez używania `float`
+- waga jest reprezentowana jako `int` w gramach,
+- cena jest reprezentowana jako `int` w groszach za kilogram,
+- wartość pozycji jest liczona bez `float`.
 
 Przykład:
 
+```text
 cena: 450 gr/kg
 waga: 2300 g
 wartość: 1035 gr
+```
 
 ### Produkty na sztuki
 
 Dla produktów sprzedawanych na sztuki:
 
-- ilość musi być liczbą całkowitą
-- cena musi być reprezentowana jako int w groszach za sztukę
-- wartość pozycji = cena za sztukę × ilość
+- ilość jest liczbą całkowitą,
+- cena jest reprezentowana jako `int` w groszach za sztukę,
+- wartość pozycji = cena za sztukę × ilość.
 
 ### Pieniądze
 
-W całym projekcie pieniądze muszą być reprezentowane jako int w groszach.
+W całym projekcie pieniądze są reprezentowane jako `int` w groszach.
 
-Nie wolno używać float ani double do reprezentacji pieniędzy.
+Nie wolno używać `float` ani `double` do reprezentacji pieniędzy.
 
 Poprawne:
 
+```text
 42,50 zł = 4250
+```
 
 Niepoprawne:
 
+```text
 42.50 jako float
+```
+
+`core/money.py` zawiera tylko czystą logikę obliczeń. Nie formatuje tekstów i nie parsuje tekstu użytkownika.
 
 ### Zaokrąglanie
 
-Suma końcowa musi być zaokrąglana do najbliższych 50 groszy.
+Suma końcowa jest zaokrąglana do najbliższych 50 groszy.
 
 Przykłady:
 
+```text
 42,24 zł -> 42,00 zł
 42,25 zł -> 42,50 zł
 42,49 zł -> 42,50 zł
 42,50 zł -> 42,50 zł
 42,74 zł -> 42,50 zł
 42,75 zł -> 43,00 zł
+```
 
-Aplikacja powinna przechowywać:
+Aplikacja przechowuje:
 
-- sumę techniczną przed zaokrągleniem
-- sumę końcową po zaokrągleniu
+- sumę techniczną przed zaokrągleniem,
+- sumę końcową po zaokrągleniu.
 
 ### Płatność
 
 Aplikacja musi umożliwiać:
 
-- wpisanie kwoty otrzymanej od klienta
-- sprawdzenie, czy kwota otrzymana jest wystarczająca
-- wyliczenie reszty
-- pokazanie reszty jako kwoty w złotówkach
+- rozpoczęcie płatności tylko dla niepustego koszyka,
+- wpisanie kwoty otrzymanej od klienta,
+- sprawdzenie, czy kwota otrzymana jest wystarczająca,
+- wyliczenie reszty albo brakującej kwoty,
+- zapis sprzedaży po zaakceptowanej płatności.
 
-Aplikacja nie musi pokazywać rozbicia reszty na nominały.
+`set_paid_grosze()` działa tylko po jawnie rozpoczętej płatności.
 
 ### Historia sprzedaży
 
 Aplikacja musi zapisywać każdą zakończoną sprzedaż.
 
-Sprzedaż musi zawierać:
+Sprzedaż zawiera:
 
-- identyfikator
-- datę i godzinę
-- sumę techniczną
-- sumę po zaokrągleniu
-- kwotę otrzymaną
-- resztę
-- pozycje sprzedaży
+- identyfikator,
+- datę i godzinę,
+- sumę techniczną,
+- sumę po zaokrągleniu,
+- kwotę otrzymaną,
+- resztę,
+- pozycje sprzedaży.
 
-Pozycje sprzedaży muszą zawierać snapshot danych produktu, aby późniejsza zmiana ceny nie zmieniała historii.
+Pozycje sprzedaży zawierają snapshot danych produktu, aby późniejsza zmiana ceny albo nazwy nie zmieniała historii.
+
+GUI historii nie może operować bezpośrednio na `Sale` ani `SaleItem`. Ma korzystać z DTO:
+
+- `SaleSummaryViewState`,
+- `SaleDetailsViewState`,
+- `SaleItemViewState`.
 
 ### Baza danych
 
-Aplikacja musi używać SQLite.
+Aplikacja używa SQLite.
 
 Wymagane tabele MVP:
 
-- products
-- sales
-- sale_items
+- `products`,
+- `sales`,
+- `sale_items`.
 
-Nie używać ORM w MVP. Preferowane jest sqlite3 z biblioteki standardowej.
+Nie używać ORM w MVP. Preferowane jest `sqlite3` z biblioteki standardowej.
+
+Zapis sprzedaży musi być transakcyjny: jeśli zapis pozycji się nie uda, rekord sprzedaży nie zostaje w bazie.
 
 ### Mock wagi
 
-Na etapie developmentu aplikacja musi działać bez prawdziwej wagi.
+Na etapie developmentu aplikacja działa bez prawdziwej wagi.
 
-Wymagany jest interfejs Scale oraz implementacja MockScale.
+Wymagany jest interfejs `Scale` oraz implementacja `MockScale`.
 
-Mock wagi musi umożliwiać:
+Mock wagi umożliwia:
 
-- ustawienie masy testowej w gramach
-- odczyt masy w gramach
-- reset wartości
+- ustawienie masy testowej w gramach,
+- odczyt masy w gramach,
+- reset/tarowanie wartości.
 
 Docelowa implementacja prawdziwej wagi ma zostać dodana później jako osobny adapter.
 
 ### GUI
 
-Aplikacja musi mieć GUI w PySide6.
+Aplikacja ma mieć GUI w PySide6, ale aktualny etap projektu przygotowuje warstwy pod GUI bez implementowania ekranów.
 
 Wymagane ekrany MVP:
 
-- ekran sprzedaży
-- ekran ustawień produktów
-- ekran historii sprzedaży
+- ekran sprzedaży,
+- ekran ustawień produktów,
+- ekran historii sprzedaży.
 
-Ekran sprzedaży musi pokazywać:
+GUI ma korzystać z publicznej fasady `AppController` i DTO/ViewState. GUI nie powinno importować:
 
-- przyciski produktów
-- aktualny koszyk
-- sumę techniczną
-- sumę po zaokrągleniu
-- kwotę otrzymaną
-- resztę
-- aktualny tryb aplikacji
+- `core.Product`,
+- `core.UnitType`,
+- `core.Cart`,
+- `core.CartItem`,
+- `core.Sale`,
+- `core.SaleItem`.
+
+Wszystkie teksty widoczne w GUI powinny być przygotowane w warstwie `controller/presentation`, przede wszystkim przez `ViewState` i stałe z `controller/labels.py`.
 
 ### Obsługa klawiaturą
 
@@ -205,67 +235,83 @@ Aplikacja musi obsługiwać skróty klawiaturowe.
 
 Skróty klawiaturowe muszą wywoływać te same akcje co przyciski GUI.
 
-Logika nie może być duplikowana między kliknięciami GUI i skrótami klawiaturowymi.
-
 Poprawny model:
 
-GUI button -> command -> controller
-keyboard   -> command -> controller
+```text
+GUI button -> command/controller -> ViewState
+keyboard   -> command/controller -> ViewState
+```
 
 Niepoprawny model:
 
-GUI button ma własną logikę
-keyboard ma osobną skopiowaną logikę
+```text
+GUI button ma własną logikę sprzedaży
+keyboard ma osobną skopiowaną logikę sprzedaży
+```
+
+`Command.SELECT_PRODUCT` przyjmuje `product_id`. Skrót klawiaturowy `1-9` oznacza slot przycisku produktu i jest mapowany do `product_id` przez `ProductViewState`.
 
 ### Eksport danych
 
 MVP może nie zawierać eksportu, ale architektura powinna umożliwiać późniejsze dodanie:
 
-- eksportu CSV
-- backupu bazy danych
-- eksportu historii sprzedaży
+- eksportu CSV,
+- backupu bazy danych,
+- eksportu historii sprzedaży.
 
 ## Wymagania niefunkcjonalne
+
 ### Niezawodność
 
 Aplikacja ma być prosta, przewidywalna i odporna na błędy operatora.
 
 Wymagane:
 
-walidacja kwoty otrzymanej
-walidacja ilości
-walidacja ceny produktu
-brak ujemnych kwot
-brak sprzedaży pustego koszyka
-brak zapisu sprzedaży bez zatwierdzenia
+- walidacja kwoty otrzymanej,
+- walidacja ilości,
+- walidacja ceny produktu,
+- brak ujemnych kwot,
+- brak sprzedaży pustego koszyka,
+- brak zapisu sprzedaży bez zatwierdzonej płatności.
 
 ### Testowalność
 
 Czysta logika domenowa musi być testowalna bez GUI, bazy danych i sprzętu.
 
-Testy jednostkowe są wymagane dla:
+Testy obejmują:
 
-- formatowania pieniędzy
-- parsowania pieniędzy
-- zaokrąglania do 50 groszy
-- liczenia reszty
-- liczenia pozycji ważonej
-- liczenia pozycji na sztuki
-- sumowania koszyka
+- obliczenia pieniędzy,
+- zaokrąglanie do 50 groszy,
+- liczenie reszty,
+- liczenie pozycji ważonej,
+- liczenie pozycji na sztuki,
+- sumowanie koszyka,
+- tworzenie sprzedaży,
+- repozytoria SQLite,
+- transakcyjność zapisu sprzedaży,
+- mock wagi,
+- DTO/ViewState,
+- fasadę `AppController`,
+- `KeyboardController`.
+
+Formatowanie tekstów UI jest testowane poza `core/money.py`.
 
 ### Rozdzielenie odpowiedzialności
 
-core/ nie może importować:
+`core/` nie może importować:
 
-- ui/
-- data/
-- hardware/
+- `ui/`,
+- `data/`,
+- `hardware/`,
+- `controller/`.
 
-ui/ nie powinno zawierać logiki liczenia sprzedaży.
+`ui/` nie powinno importować `core/` ani zawierać logiki liczenia sprzedaży.
 
-hardware/ nie powinno zawierać logiki sprzedaży.
+`hardware/` nie powinno zawierać logiki sprzedaży.
 
-data/ nie powinno zawierać logiki GUI.
+`data/` nie powinno zawierać logiki GUI.
+
+`controller/` jest miejscem integracji domeny, repozytoriów, sprzętu i DTO dla GUI.
 
 ### Offline-first
 
@@ -273,10 +319,10 @@ Aplikacja musi działać bez internetu.
 
 Internet nie może być wymagany do:
 
-- sprzedaży
-- edycji produktów
-- liczenia ceny
-- zapisu historii
+- sprzedaży,
+- edycji produktów,
+- liczenia ceny,
+- zapisu historii.
 
 ### Prostota
 
@@ -284,24 +330,24 @@ Nie dodawać frameworków bez potrzeby.
 
 Na etapie MVP unikać:
 
-- ORM
-- web backendu
-- kont użytkowników
-- synchronizacji chmurowej
-- rozbudowanego systemu uprawnień
-- integracji fiskalnych
-- drukarki
-- rozbicia reszty na nominały
+- ORM,
+- web backendu,
+- kont użytkowników,
+- synchronizacji chmurowej,
+- rozbudowanego systemu uprawnień,
+- integracji fiskalnych,
+- drukarki,
+- rozbicia reszty na nominały.
 
 Poza zakresem MVP:
 
-- certyfikacja fiskalna
-- drukowanie paragonów fiskalnych
-- integracja z terminalem płatniczym
-- synchronizacja z chmurą
-- obsługa wielu stanowisk jednocześnie
-- rozbudowane raporty księgowe
-- zarządzanie magazynem
-- obsługa kodów kreskowych
-- skaner
-- logowanie użytkowników
+- certyfikacja fiskalna,
+- drukowanie paragonów fiskalnych,
+- integracja z terminalem płatniczym,
+- synchronizacja z chmurą,
+- obsługa wielu stanowisk jednocześnie,
+- rozbudowane raporty księgowe,
+- zarządzanie magazynem,
+- obsługa kodów kreskowych,
+- skaner,
+- logowanie użytkowników.
