@@ -84,7 +84,7 @@ class KeyboardController:
 
         if app_state is AppState.PAYMENT:
             self._payment_buffer += digit
-            return self._app_controller.set_paid_grosze(self._payment_buffer_to_grosze())
+            return None
 
         if app_state is AppState.READING_WEIGHT:
             return None
@@ -103,7 +103,6 @@ class KeyboardController:
         if self._payment_buffer == "":
             self._payment_buffer = "0"
         self._payment_buffer += ","
-        self._app_controller.set_paid_grosze(self._payment_buffer_to_grosze())
 
     def _confirm(self) -> Any:
         app_state = self._app_controller.prepare_view_state().app_state
@@ -120,7 +119,9 @@ class KeyboardController:
             return self._app_controller.add_selected_weighted_product()
 
         if app_state is AppState.PAYMENT:
-            return self._app_controller.save_sale()
+            if self._payment_buffer == "":
+                raise ValueError("payment amount is required")
+            return self._app_controller.set_paid_grosze(self._payment_buffer_to_grosze())
 
         return None
 
@@ -132,6 +133,15 @@ class KeyboardController:
     def quantity_buffer_text(self) -> str:
         return self._quantity_buffer
 
+    @property
+    def payment_buffer_text(self) -> str:
+        return self._payment_buffer
+
+    def set_payment_buffer_text(self, text: str) -> None:
+        if not _is_valid_payment_buffer_text(text):
+            raise ValueError("payment amount must contain digits and at most one comma")
+        self._payment_buffer = text
+
     def _backspace(self) -> Any:
         view_state = self._app_controller.prepare_view_state()
         app_state = view_state.app_state
@@ -142,8 +152,7 @@ class KeyboardController:
 
         if app_state is AppState.PAYMENT:
             self._payment_buffer = self._payment_buffer[:-1]
-            paid_grosze = 0 if self._payment_buffer == "" else self._payment_buffer_to_grosze()
-            return self._app_controller.set_paid_grosze(paid_grosze)
+            return None
 
         if not view_state.is_cart_empty:
             return self._app_controller.remove_last_item()
@@ -193,3 +202,19 @@ class KeyboardController:
     def _clear_input_buffers(self) -> None:
         self._quantity_buffer = ""
         self._payment_buffer = ""
+
+
+def _is_valid_payment_buffer_text(text: str) -> bool:
+    if text == "":
+        return True
+    if text.count(",") > 1:
+        return False
+    if "," not in text:
+        return text.isdecimal()
+
+    zloty_text, grosze_text = text.split(",", maxsplit=1)
+    return (
+        (zloty_text == "" or zloty_text.isdecimal())
+        and (grosze_text == "" or grosze_text.isdecimal())
+        and len(grosze_text) <= 2
+    )

@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLayoutItem,
+    QLineEdit,
     QMessageBox,
     QPushButton,
     QSpinBox,
@@ -23,19 +25,27 @@ from cash_assistant.controller.app_controller import AppController
 from cash_assistant.controller.keyboard_controller import Command, KeyboardController
 from cash_assistant.controller.labels import (
     ERROR_DIALOG_TITLE,
+    INFORMATION_DIALOG_TITLE,
     NO_CART_ITEMS_TEXT,
+    SALE_SAVED_TEXT,
     SALES_CANCEL_BUTTON_TEXT,
     SALES_CART_GROUP_TITLE,
     SALES_CART_LINE_TOTAL_COLUMN,
     SALES_CART_PRODUCT_COLUMN,
     SALES_CART_QUANTITY_COLUMN,
     SALES_CART_UNIT_PRICE_COLUMN,
+    SALES_CHANGE_LABEL,
     SALES_CLEAR_CART_BUTTON_TEXT,
     SALES_CONFIRM_BUTTON_TEXT,
+    SALES_PAID_INPUT_LABEL,
+    SALES_PAID_LABEL,
+    SALES_PAYMENT_STATUS_ENTER_AMOUNT_TEXT,
+    SALES_PAYMENT_STATUS_TOO_LOW_TEXT,
     SALES_PRODUCTS_GROUP_TITLE,
     SALES_QUANTITY_LABEL,
     SALES_REMOVE_LAST_BUTTON_TEXT,
     SALES_ROUNDED_TOTAL_LABEL,
+    SALES_SAVE_BUTTON_TEXT,
     SALES_SCREEN_TITLE,
     SALES_SELECTED_PRODUCT_LABEL,
     SALES_START_PAYMENT_BUTTON_TEXT,
@@ -58,15 +68,20 @@ class SalesScreen(QWidget):
         self._products_layout = QGridLayout()
         self._cart_table = self._create_cart_table()
         self._quantity_input = self._create_quantity_input()
+        self._payment_input = self._create_payment_input()
         self._rounded_total_value = QLabel()
         self._selected_product_value = QLabel()
         self._weight_value = QLabel()
+        self._payment_paid_value = QLabel()
+        self._payment_change_value = QLabel()
+        self._payment_status_value = QLabel()
 
         self._remove_last_button = QPushButton(SALES_REMOVE_LAST_BUTTON_TEXT)
         self._clear_cart_button = QPushButton(SALES_CLEAR_CART_BUTTON_TEXT)
         self._start_payment_button = QPushButton(SALES_START_PAYMENT_BUTTON_TEXT)
         self._confirm_selection_button = QPushButton(SALES_CONFIRM_BUTTON_TEXT)
         self._cancel_selection_button = QPushButton(SALES_CANCEL_BUTTON_TEXT)
+        self._save_sale_button = QPushButton(SALES_SAVE_BUTTON_TEXT)
 
         self._build_layout()
         self._connect_signals()
@@ -124,6 +139,7 @@ class SalesScreen(QWidget):
 
     def _connect_signals(self) -> None:
         self._quantity_input.valueChanged.connect(self._quantity_value_changed)
+        self._payment_input.textEdited.connect(self._payment_value_changed)
         self._remove_last_button.clicked.connect(
             lambda: self._run_controller_action(self._controller.remove_last_item)
         )
@@ -137,6 +153,7 @@ class SalesScreen(QWidget):
         self._cancel_selection_button.clicked.connect(
             lambda: self._run_keyboard_command(Command.CANCEL)
         )
+        self._save_sale_button.clicked.connect(self._save_sale)
 
     def _refresh_products_panel(self, view_state: ViewState) -> None:
         self._clear_products_layout()
@@ -148,6 +165,10 @@ class SalesScreen(QWidget):
 
         if view_state.app_state is AppState.READING_WEIGHT:
             self._refresh_weight_panel(view_state)
+            return
+
+        if view_state.app_state is AppState.PAYMENT:
+            self._refresh_payment_panel(view_state)
             return
 
         self._refresh_product_buttons(view_state.products)
@@ -184,6 +205,36 @@ class SalesScreen(QWidget):
         self._products_layout.addWidget(self._confirm_selection_button, 2, 0)
         self._products_layout.addWidget(self._cancel_selection_button, 2, 1)
 
+    def _refresh_payment_panel(self, view_state: ViewState) -> None:
+        self._refresh_payment_status(view_state)
+        self._products_layout.addLayout(
+            _summary_row(SALES_ROUNDED_TOTAL_LABEL, QLabel(view_state.rounded_total_text)),
+            0,
+            0,
+            1,
+            2,
+        )
+        self._products_layout.addWidget(QLabel(SALES_PAID_INPUT_LABEL), 1, 0)
+        self._products_layout.addWidget(self._payment_input, 1, 1)
+        self._products_layout.addLayout(
+            _summary_row(SALES_PAID_LABEL, self._payment_paid_value),
+            2,
+            0,
+            1,
+            2,
+        )
+        self._products_layout.addLayout(
+            _summary_row(SALES_CHANGE_LABEL, self._payment_change_value),
+            3,
+            0,
+            1,
+            2,
+        )
+        self._products_layout.addWidget(self._payment_status_value, 4, 0, 1, 2)
+        self._products_layout.addWidget(self._confirm_selection_button, 5, 0)
+        self._products_layout.addWidget(self._save_sale_button, 5, 1)
+        self._products_layout.addWidget(self._cancel_selection_button, 6, 0, 1, 2)
+
     def _refresh_cart(self, view_state: ViewState) -> None:
         self._cart_table.setRowCount(len(view_state.cart_items))
         if not view_state.cart_items:
@@ -202,6 +253,7 @@ class SalesScreen(QWidget):
 
     def _refresh_controls(self, view_state: ViewState) -> None:
         in_quantity_mode = view_state.app_state is AppState.ENTERING_QUANTITY
+        in_payment_mode = view_state.app_state is AppState.PAYMENT
 
         self._rounded_total_value.setText(view_state.rounded_total_text)
         self._quantity_input.setEnabled(in_quantity_mode)
@@ -209,9 +261,11 @@ class SalesScreen(QWidget):
             self._quantity_digits = ""
             self._quantity_input.setValue(1)
 
+        self._payment_input.setEnabled(in_payment_mode)
         self._remove_last_button.setEnabled(not view_state.is_cart_empty)
         self._clear_cart_button.setEnabled(not view_state.is_cart_empty)
-        self._start_payment_button.setEnabled(not view_state.is_cart_empty)
+        self._start_payment_button.setEnabled(not view_state.is_cart_empty and not in_payment_mode)
+        self._save_sale_button.setEnabled(in_payment_mode and view_state.change_grosze is not None)
         self._sync_keyboard_buffers(view_state)
 
     def _confirm_current_action(self) -> None:
@@ -224,11 +278,34 @@ class SalesScreen(QWidget):
 
         if self._view_state.app_state is AppState.READING_WEIGHT:
             self._run_controller_action(self._controller.add_selected_weighted_product)
+            return
+
+        if self._view_state.app_state is AppState.PAYMENT:
+            self._run_keyboard_command(Command.CONFIRM)
 
     def _quantity_value_changed(self, quantity: int) -> None:
         if self._is_refreshing or self._view_state.app_state is not AppState.ENTERING_QUANTITY:
             return
         self._quantity_digits = str(quantity)
+
+    def _payment_value_changed(self, text: str) -> None:
+        if self._is_refreshing or self._view_state.app_state is not AppState.PAYMENT:
+            return
+        try:
+            self._keyboard_controller.set_payment_buffer_text(text)
+        except ValueError as error:
+            self._show_error(str(error))
+            return
+        self._payment_status_value.setText(SALES_PAYMENT_STATUS_ENTER_AMOUNT_TEXT)
+
+    def _save_sale(self) -> None:
+        try:
+            self._keyboard_controller.handle(Command.SAVE_SALE)
+        except ValueError as error:
+            self._show_error(str(error))
+            return
+        QMessageBox.information(self, INFORMATION_DIALOG_TITLE, SALE_SAVED_TEXT)
+        self.refresh()
 
     def _run_keyboard_command(self, command: Command, payload: object | None = None) -> None:
         try:
@@ -247,12 +324,31 @@ class SalesScreen(QWidget):
         self.refresh()
 
     def _sync_keyboard_buffers(self, view_state: ViewState) -> None:
+        if view_state.app_state is AppState.PAYMENT:
+            payment_text = self._keyboard_controller.payment_buffer_text
+            self._payment_input.setText(payment_text)
+            return
+
         if view_state.app_state is not AppState.ENTERING_QUANTITY:
             return
 
         quantity_text = self._keyboard_controller.quantity_buffer_text
         quantity = int(quantity_text) if quantity_text else 1
         self._quantity_input.setValue(quantity)
+
+    def _refresh_payment_status(self, view_state: ViewState) -> None:
+        self._payment_paid_value.setText(view_state.paid_text or "")
+        self._payment_change_value.setText(view_state.change_text or "")
+
+        if view_state.missing_grosze is not None:
+            self._payment_status_value.setText(SALES_PAYMENT_STATUS_TOO_LOW_TEXT)
+            return
+
+        if view_state.change_grosze is not None:
+            self._payment_status_value.setText("")
+            return
+
+        self._payment_status_value.setText(SALES_PAYMENT_STATUS_ENTER_AMOUNT_TEXT)
 
     def _show_error(self, message: str) -> None:
         QMessageBox.warning(self, ERROR_DIALOG_TITLE, message)
@@ -262,9 +358,7 @@ class SalesScreen(QWidget):
             item = self._products_layout.takeAt(0)
             if item is None:
                 continue
-            widget = item.widget()
-            if widget is not None:
-                widget.setParent(None)
+            _clear_layout_item(item)
 
     def _create_cart_table(self) -> QTableWidget:
         table = QTableWidget(0, 4)
@@ -288,6 +382,12 @@ class SalesScreen(QWidget):
         input_widget.setEnabled(False)
         return input_widget
 
+    def _create_payment_input(self) -> QLineEdit:
+        input_widget = QLineEdit()
+        input_widget.setPlaceholderText("0,00")
+        input_widget.setEnabled(False)
+        return input_widget
+
 
 def _summary_row(label_text: str, value_label: QLabel) -> QHBoxLayout:
     layout = QHBoxLayout()
@@ -297,14 +397,26 @@ def _summary_row(label_text: str, value_label: QLabel) -> QHBoxLayout:
     return layout
 
 
+def _clear_layout_item(item: QLayoutItem) -> None:
+    widget = item.widget()
+    if widget is not None:
+        widget.setParent(None)
+        return
+
+    layout = item.layout()
+    if layout is None:
+        return
+
+    while layout.count():
+        child = layout.takeAt(0)
+        if child is not None:
+            _clear_layout_item(child)
+
+
 def _selected_product_text(view_state: ViewState) -> str:
     if view_state.selected_product is None:
         return ""
     return view_state.selected_product.name
-
-
-def _whole_zloty_to_grosze(zloty: int) -> int:
-    return zloty * 100
 
 
 def _command_from_key_event(event: QKeyEvent) -> tuple[Command, object | None] | None:
@@ -312,16 +424,21 @@ def _command_from_key_event(event: QKeyEvent) -> tuple[Command, object | None] |
     if digit is not None:
         return Command.DIGIT_TYPED, digit
 
-    key = event.key()
-    if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Plus):
-        return Command.CONFIRM, None
-    if key == Qt.Key.Key_Escape:
-        return Command.CANCEL, None
-    if key == Qt.Key.Key_Backspace:
-        return Command.BACKSPACE, None
-    if key == Qt.Key.Key_Minus:
-        return Command.REMOVE_LAST_ITEM, None
-    return None
+    if event.text() == ",":
+        return Command.DECIMAL_SEPARATOR_TYPED, None
+
+    command_by_key = {
+        Qt.Key.Key_Return: Command.CONFIRM,
+        Qt.Key.Key_Enter: Command.CONFIRM,
+        Qt.Key.Key_Plus: Command.CONFIRM,
+        Qt.Key.Key_Escape: Command.CANCEL,
+        Qt.Key.Key_Backspace: Command.BACKSPACE,
+        Qt.Key.Key_Minus: Command.REMOVE_LAST_ITEM,
+    }
+    command = command_by_key.get(Qt.Key(event.key()))
+    if command is None:
+        return None
+    return command, None
 
 
 def _digit_from_key_event(event: QKeyEvent) -> str | None:

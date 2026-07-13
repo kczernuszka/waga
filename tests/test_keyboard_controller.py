@@ -224,6 +224,11 @@ def test_start_payment_and_digits_calculate_change(
     keyboard_controller.handle(Command.DIGIT_TYPED, "2")
     keyboard_controller.handle(Command.DIGIT_TYPED, "0")
 
+    unconfirmed_view_state = app_controller.prepare_view_state()
+    assert unconfirmed_view_state.paid_grosze is None
+
+    keyboard_controller.handle(Command.CONFIRM)
+
     view_state = app_controller.prepare_view_state()
     assert view_state.app_state is AppState.PAYMENT
     assert view_state.paid_grosze == 2_000
@@ -246,10 +251,32 @@ def test_payment_buffer_accepts_decimal_separator(
     keyboard_controller.handle(Command.DIGIT_TYPED, "0")
     keyboard_controller.handle(Command.DIGIT_TYPED, "0")
 
+    assert app_controller.prepare_view_state().paid_grosze is None
+
+    keyboard_controller.handle(Command.CONFIRM)
+
     view_state = app_controller.prepare_view_state()
     assert view_state.paid_grosze == 100
     assert view_state.change_grosze is None
     assert view_state.missing_grosze == 950
+
+
+def test_payment_buffer_accepts_comma_text_from_gui_input(
+    app_controller: AppController,
+    keyboard_controller: KeyboardController,
+    scale: MockScale,
+) -> None:
+    scale.set_weight_grams(1_500)
+    keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    keyboard_controller.handle(Command.CONFIRM)
+    keyboard_controller.handle(Command.START_PAYMENT)
+
+    keyboard_controller.set_payment_buffer_text("20,50")
+    keyboard_controller.handle(Command.CONFIRM)
+
+    view_state = app_controller.prepare_view_state()
+    assert view_state.paid_grosze == 2_050
+    assert view_state.change_grosze == 1_000
 
 
 def test_save_sale_command_uses_app_controller_and_repository(
@@ -263,6 +290,7 @@ def test_save_sale_command_uses_app_controller_and_repository(
     keyboard_controller.handle(Command.START_PAYMENT)
     keyboard_controller.handle(Command.DIGIT_TYPED, "2")
     keyboard_controller.handle(Command.DIGIT_TYPED, "0")
+    keyboard_controller.handle(Command.CONFIRM)
 
     saved_sale = keyboard_controller.handle(Command.SAVE_SALE)
 

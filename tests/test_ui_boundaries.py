@@ -2,7 +2,6 @@ import ast
 from pathlib import Path
 
 from cash_assistant.main import build_development_controller
-from cash_assistant.ui.sales_screen import _whole_zloty_to_grosze
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UI_PATH = PROJECT_ROOT / "src" / "cash_assistant" / "ui"
@@ -43,10 +42,12 @@ def test_development_controller_does_not_duplicate_seed_products(tmp_path: Path)
     assert len(second_controller.list_products_for_settings()) == 4
 
 
-def test_sales_screen_paid_input_uses_whole_zloty_values() -> None:
-    assert _whole_zloty_to_grosze(0) == 0
-    assert _whole_zloty_to_grosze(1) == 100
-    assert _whole_zloty_to_grosze(20) == 2_000
+def test_sales_screen_paid_input_accepts_comma_text() -> None:
+    source = (UI_PATH / "sales_screen.py").read_text(encoding="utf-8")
+
+    assert "QLineEdit" in source
+    assert "textEdited.connect(self._payment_value_changed)" in source
+    assert "Command.DECIMAL_SEPARATOR_TYPED" in source
 
 
 def test_main_window_installs_global_event_filter_for_sales_screen() -> None:
