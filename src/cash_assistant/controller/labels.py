@@ -1,4 +1,10 @@
 """Polish GUI-facing labels prepared by the controller layer."""
 
+CURRENCY_TEXT = "zł"
+DATETIME_TEXT_FORMAT = "%Y-%m-%d %H:%M"
+PRODUCT_BUTTON_TEXT_SEPARATOR = "\n"
 PRODUCT_ACTIVE_TEXT = "Aktywny"
 PRODUCT_INACTIVE_TEXT = "Nieaktywny"
+UNIT_KG_TEXT = "kg"
+UNIT_PIECE_TEXT = "szt."
+UNIT_PRICE_TEXT_SEPARATOR = "/"

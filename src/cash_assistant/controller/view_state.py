@@ -5,8 +5,14 @@ from datetime import datetime
 from enum import Enum
 
 from cash_assistant.controller.labels import (
+    CURRENCY_TEXT,
+    DATETIME_TEXT_FORMAT,
     PRODUCT_ACTIVE_TEXT,
+    PRODUCT_BUTTON_TEXT_SEPARATOR,
     PRODUCT_INACTIVE_TEXT,
+    UNIT_KG_TEXT,
+    UNIT_PIECE_TEXT,
+    UNIT_PRICE_TEXT_SEPARATOR,
 )
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
@@ -156,7 +162,7 @@ def build_product_view_state(product: Product) -> ProductViewState:
         name=product.name,
         price_text=price_text,
         unit_text=unit_text,
-        button_text=f"{product.name}\n{price_text}",
+        button_text=f"{product.name}{PRODUCT_BUTTON_TEXT_SEPARATOR}{price_text}",
     )
 
 
@@ -252,7 +258,7 @@ def _format_money(grosze: int) -> str:
     _ensure_non_negative(grosze, "grosze")
     zloty = grosze // 100
     grosze_remainder = grosze % 100
-    return f"{zloty},{grosze_remainder:02d} zł"
+    return f"{zloty},{grosze_remainder:02d} {CURRENCY_TEXT}"
 
 
 def _format_weight_grams(weight_grams: int) -> str:
@@ -260,20 +266,20 @@ def _format_weight_grams(weight_grams: int) -> str:
     kilograms_hundredths = (weight_grams + 5) // 10
     kilograms = kilograms_hundredths // 100
     hundredths_remainder = kilograms_hundredths % 100
-    return f"{kilograms},{hundredths_remainder:02d} kg"
+    return f"{kilograms},{hundredths_remainder:02d} {UNIT_KG_TEXT}"
 
 
 def _format_piece_quantity(quantity: int) -> str:
     _ensure_non_negative(quantity, "quantity")
-    return f"{quantity} szt."
+    return f"{quantity} {UNIT_PIECE_TEXT}"
 
 
 def _format_unit_type(unit_type: UnitType) -> str:
     match unit_type:
         case UnitType.KG:
-            return "kg"
+            return UNIT_KG_TEXT
         case UnitType.PIECE:
-            return "szt."
+            return UNIT_PIECE_TEXT
 
 
 def _format_active(active: bool) -> str:
@@ -289,11 +295,11 @@ def _format_quantity(unit_type: UnitType, quantity_value: int) -> str:
 
 
 def _format_unit_price(price_grosze: int, unit_text: str) -> str:
-    return f"{_format_money(price_grosze)}/{unit_text}"
+    return f"{_format_money(price_grosze)}{UNIT_PRICE_TEXT_SEPARATOR}{unit_text}"
 
 
 def _format_datetime(value: datetime) -> str:
-    return value.strftime("%Y-%m-%d %H:%M")
+    return value.strftime(DATETIME_TEXT_FORMAT)
 
 
 def _require_sale_id(sale: Sale) -> int:
@@ -304,8 +310,8 @@ def _require_sale_id(sale: Sale) -> int:
 
 def _unit_options() -> tuple[UnitOptionViewState, ...]:
     return (
-        UnitOptionViewState(unit_code=UnitType.KG.value, label="kg"),
-        UnitOptionViewState(unit_code=UnitType.PIECE.value, label="szt."),
+        UnitOptionViewState(unit_code=UnitType.KG.value, label=UNIT_KG_TEXT),
+        UnitOptionViewState(unit_code=UnitType.PIECE.value, label=UNIT_PIECE_TEXT),
     )
 
 

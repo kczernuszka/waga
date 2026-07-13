@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from datetime import UTC, datetime
 
+from cash_assistant.controller.labels import CURRENCY_TEXT
 from cash_assistant.controller.view_state import (
     AppState,
     PaymentState,
@@ -284,4 +285,4 @@ def _format_money(grosze: int) -> str:
         raise ValueError("grosze cannot be negative")
     zloty = grosze // 100
     grosze_remainder = grosze % 100
-    return f"{zloty},{grosze_remainder:02d} zł"
+    return f"{zloty},{grosze_remainder:02d} {CURRENCY_TEXT}"
