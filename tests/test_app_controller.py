@@ -609,6 +609,38 @@ def test_settings_save_product_input_maps_primitives_to_domain_model(
     assert controller.prepare_product_edit_view_state(created.product_id) == updated
 
 
+def test_settings_save_product_input_rejects_empty_name(
+    controller: AppController,
+) -> None:
+    with pytest.raises(ValueError):
+        controller.save_product_from_input(
+            ProductEditInput(
+                product_id=None,
+                name="   ",
+                unit_code="piece",
+                price_grosze=120,
+                active=True,
+                sort_order=10,
+            )
+        )
+
+
+def test_settings_save_product_input_rejects_zero_price(
+    controller: AppController,
+) -> None:
+    with pytest.raises(ValueError):
+        controller.save_product_from_input(
+            ProductEditInput(
+                product_id=None,
+                name="Roll",
+                unit_code="piece",
+                price_grosze=0,
+                active=True,
+                sort_order=10,
+            )
+        )
+
+
 def test_history_sale_list_returns_summary_view_states(
     controller: AppController,
     scale: MockScale,

@@ -83,9 +83,10 @@ class AppController:
         self,
         product_input: ProductEditInput,
     ) -> ProductEditViewState:
+        _validate_product_input(product_input)
         product = Product(
             id=product_input.product_id,
-            name=product_input.name,
+            name=product_input.name.strip(),
             unit_type=UnitType(product_input.unit_code),
             price_grosze=product_input.price_grosze,
             active=product_input.active,
@@ -323,3 +324,10 @@ def _format_weight_grams(weight_grams: int) -> str:
     kilograms = kilograms_hundredths // 100
     hundredths_remainder = kilograms_hundredths % 100
     return f"{kilograms},{hundredths_remainder:02d} {UNIT_KG_TEXT}"
+
+
+def _validate_product_input(product_input: ProductEditInput) -> None:
+    if product_input.name.strip() == "":
+        raise ValueError("product name is required")
+    if product_input.price_grosze <= 0:
+        raise ValueError("product price must be greater than zero")
