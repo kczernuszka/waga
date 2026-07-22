@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -66,6 +67,9 @@ class SettingsScreen(QWidget):
         self._products: list[ProductListItemViewState] = []
         self._edit_view_state: ProductEditViewState | None = None
         self._is_refreshing = False
+        self._page_stack: QStackedWidget
+        self._products_page: QWidget
+        self._form_page: QWidget
 
         self._title_label = QLabel(SETTINGS_SCREEN_TITLE)
         self._products_table = self._create_products_table()
@@ -85,27 +89,41 @@ class SettingsScreen(QWidget):
         self._build_layout()
         self._connect_signals()
         self.refresh()
-        self._load_form(product_id=None)
 
     def refresh(self) -> None:
         self._products = self._controller.list_products_for_settings()
         self._refresh_products_table()
+        self._show_products_page()
 
     def _build_layout(self) -> None:
         root_layout = QVBoxLayout(self)
         root_layout.addWidget(self._title_label)
 
-        content_layout = QHBoxLayout()
-        content_layout.addWidget(self._build_list_group(), stretch=2)
-        content_layout.addWidget(self._build_form_group(), stretch=1)
-        root_layout.addLayout(content_layout)
+        self._page_stack = QStackedWidget()
+        self._products_page = self._build_products_page()
+        self._form_page = self._build_form_page()
+        self._page_stack.addWidget(self._products_page)
+        self._page_stack.addWidget(self._form_page)
+        root_layout.addWidget(self._page_stack)
+
+    def _build_products_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.addWidget(self._build_list_group())
 
         actions_layout = QHBoxLayout()
         actions_layout.addWidget(self._add_button)
         actions_layout.addWidget(self._edit_button)
         actions_layout.addStretch()
         actions_layout.addWidget(self._back_button)
-        root_layout.addLayout(actions_layout)
+        layout.addLayout(actions_layout)
+        return page
+
+    def _build_form_page(self) -> QWidget:
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        layout.addWidget(self._build_form_group())
+        return page
 
     def _build_list_group(self) -> QGroupBox:
         group = QGroupBox(SETTINGS_LIST_GROUP_TITLE)
@@ -136,7 +154,7 @@ class SettingsScreen(QWidget):
         self._add_button.clicked.connect(lambda: self._load_form(product_id=None))
         self._edit_button.clicked.connect(self._edit_selected_product)
         self._save_button.clicked.connect(self._save_product)
-        self._cancel_button.clicked.connect(lambda: self._load_form(product_id=None))
+        self._cancel_button.clicked.connect(self._cancel_editing)
         self._back_button.clicked.connect(self._on_back_to_sales)
         self._products_table.itemDoubleClicked.connect(lambda _item: self._edit_selected_product())
 
@@ -163,6 +181,7 @@ class SettingsScreen(QWidget):
             return
         self._edit_view_state = view_state
         self._fill_form(view_state)
+        self._show_form_page()
 
     def _fill_form(self, view_state: ProductEditViewState) -> None:
         self._is_refreshing = True
@@ -208,14 +227,19 @@ class SettingsScreen(QWidget):
 
         try:
             product_input = self._product_input_from_form()
-            saved_product = self._controller.save_product_from_input(product_input)
+            self._controller.save_product_from_input(product_input)
         except ValueError as error:
             self._show_error(str(error))
             return
 
         self.refresh()
         self._on_products_changed()
-        self._load_form(saved_product.product_id)
+        self._edit_view_state = None
+        self._show_products_page()
+
+    def _cancel_editing(self) -> None:
+        self._edit_view_state = None
+        self._show_products_page()
 
     def _product_input_from_form(self) -> ProductEditInput:
         if self._edit_view_state is None:
@@ -236,6 +260,12 @@ class SettingsScreen(QWidget):
 
     def _show_error(self, message: str) -> None:
         QMessageBox.warning(self, ERROR_DIALOG_TITLE, message)
+
+    def _show_products_page(self) -> None:
+        self._page_stack.setCurrentWidget(self._products_page)
+
+    def _show_form_page(self) -> None:
+        self._page_stack.setCurrentWidget(self._form_page)
 
     def _create_products_table(self) -> QTableWidget:
         table = QTableWidget(0, 5)

@@ -58,6 +58,11 @@ def test_settings_screen_uses_controller_dtos_for_product_editing() -> None:
     assert "prepare_product_edit_view_state(product_id)" in source
     assert "save_product_from_input(product_input)" in source
     assert "ProductEditInput(" in source
+    assert "QStackedWidget" in source
+    assert "self._page_stack.addWidget(self._products_page)" in source
+    assert "self._page_stack.addWidget(self._form_page)" in source
+    assert "self._show_form_page()" in source
+    assert "self._show_products_page()" in source
 
 
 def test_settings_screen_price_parser_accepts_comma_text() -> None:
