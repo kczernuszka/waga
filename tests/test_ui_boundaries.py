@@ -84,7 +84,8 @@ def test_main_window_installs_global_event_filter_for_sales_screen() -> None:
     assert "installEventFilter(self)" in source
     assert "def eventFilter(" in source
     assert "QStackedWidget" in source
-    assert "HistoryScreen" in source
+    assert "HistoryScreen" not in source
+    assert "show_history_screen" not in source
     assert "setCentralWidget(self._screen_stack)" in source
     assert "setCentralWidget(self._sales_screen)" not in source
     assert "setCentralWidget(self._settings_screen)" not in source
@@ -99,6 +100,15 @@ def test_sales_screen_global_key_handling_uses_keyboard_controller() -> None:
     assert "def handle_global_key_event(" in source
     assert "self._keyboard_controller.handle(command, payload)" in source
     assert "Numpad digits should work independently of widget focus" in source
+
+
+def test_sales_screen_does_not_expose_history_navigation() -> None:
+    source = (UI_PATH / "sales_screen.py").read_text(encoding="utf-8")
+
+    assert "SALES_OPEN_HISTORY_BUTTON_TEXT" not in source
+    assert "_open_history_button" not in source
+    assert "_open_history" not in source
+    assert "on_open_history" not in source
 
 
 def _imported_modules(module: ast.Module) -> set[str]:

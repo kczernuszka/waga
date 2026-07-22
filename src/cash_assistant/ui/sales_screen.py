@@ -37,7 +37,6 @@ from cash_assistant.controller.labels import (
     SALES_CHANGE_LABEL,
     SALES_CLEAR_CART_BUTTON_TEXT,
     SALES_CONFIRM_BUTTON_TEXT,
-    SALES_OPEN_HISTORY_BUTTON_TEXT,
     SALES_OPEN_SETTINGS_BUTTON_TEXT,
     SALES_PAID_INPUT_LABEL,
     SALES_PAID_LABEL,
@@ -61,12 +60,10 @@ class SalesScreen(QWidget):
         self,
         controller: AppController,
         on_open_settings: Callable[[], None] | None = None,
-        on_open_history: Callable[[], None] | None = None,
     ) -> None:
         super().__init__()
         self._controller = controller
         self._on_open_settings = on_open_settings
-        self._on_open_history = on_open_history
         self._keyboard_controller = KeyboardController(controller)
         self._view_state = controller.prepare_view_state()
         self._product_buttons: list[QPushButton] = []
@@ -89,7 +86,6 @@ class SalesScreen(QWidget):
         self._clear_cart_button = QPushButton(SALES_CLEAR_CART_BUTTON_TEXT)
         self._start_payment_button = QPushButton(SALES_START_PAYMENT_BUTTON_TEXT)
         self._open_settings_button = QPushButton(SALES_OPEN_SETTINGS_BUTTON_TEXT)
-        self._open_history_button = QPushButton(SALES_OPEN_HISTORY_BUTTON_TEXT)
         self._confirm_selection_button = QPushButton(SALES_CONFIRM_BUTTON_TEXT)
         self._cancel_selection_button = QPushButton(SALES_CANCEL_BUTTON_TEXT)
         self._save_sale_button = QPushButton(SALES_SAVE_BUTTON_TEXT)
@@ -135,7 +131,6 @@ class SalesScreen(QWidget):
         actions_layout.addWidget(self._clear_cart_button)
         actions_layout.addWidget(self._start_payment_button)
         actions_layout.addWidget(self._open_settings_button)
-        actions_layout.addWidget(self._open_history_button)
         root_layout.addLayout(actions_layout)
 
     def _build_products_group(self) -> QGroupBox:
@@ -163,7 +158,6 @@ class SalesScreen(QWidget):
             lambda: self._run_controller_action(self._controller.start_payment)
         )
         self._open_settings_button.clicked.connect(self._open_settings)
-        self._open_history_button.clicked.connect(self._open_history)
         self._confirm_selection_button.clicked.connect(self._confirm_current_action)
         self._cancel_selection_button.clicked.connect(
             lambda: self._run_keyboard_command(Command.CANCEL)
@@ -325,10 +319,6 @@ class SalesScreen(QWidget):
     def _open_settings(self) -> None:
         if self._on_open_settings is not None:
             self._on_open_settings()
-
-    def _open_history(self) -> None:
-        if self._on_open_history is not None:
-            self._on_open_history()
 
     def _run_keyboard_command(self, command: Command, payload: object | None = None) -> None:
         try:
