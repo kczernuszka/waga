@@ -2,8 +2,13 @@ import ast
 import sqlite3
 from pathlib import Path
 
+from cash_assistant.controller.view_state import ProductViewState
 from cash_assistant.main import build_development_controller
-from cash_assistant.ui.sales_screen import _product_icon_path
+from cash_assistant.ui.sales_screen import (
+    _product_icon_path,
+    _product_page_count,
+    _products_for_page,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UI_PATH = PROJECT_ROOT / "src" / "cash_assistant" / "ui"
@@ -85,6 +90,37 @@ def test_product_icon_path_uses_configured_icon_or_fallback() -> None:
     assert _product_icon_path("missing.png").name == "fallback.png"
 
 
+def test_product_pages_contain_at_most_nine_products() -> None:
+    products = tuple(_product_view_state(product_id) for product_id in range(1, 12))
+
+    assert _product_page_count(len(products)) == 2
+    assert [product.product_id for product in _products_for_page(products, 0)] == list(
+        range(1, 10)
+    )
+    assert [product.product_id for product in _products_for_page(products, 1)] == [
+        10,
+        11,
+    ]
+
+
+def test_product_page_count_does_not_add_page_for_exact_multiple_of_nine() -> None:
+    assert _product_page_count(0) == 1
+    assert _product_page_count(9) == 1
+    assert _product_page_count(18) == 2
+    assert _product_page_count(19) == 3
+
+
+def test_sales_screen_uses_page_arrows_without_scrollbar() -> None:
+    source = (UI_PATH / "sales_screen.py").read_text(encoding="utf-8")
+
+    assert "PRODUCTS_PER_PAGE = 9" in source
+    assert "_previous_products_page_button" in source
+    assert "_next_products_page_button" in source
+    assert "setVisible(has_multiple_pages)" in source
+    assert "self._keyboard_controller.set_products(page_products)" in source
+    assert "QScrollArea" not in source
+
+
 def test_history_screen_uses_controller_dtos_for_sales_history() -> None:
     source = (UI_PATH / "history_screen.py").read_text(encoding="utf-8")
 
@@ -135,3 +171,14 @@ def _imported_modules(module: ast.Module) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imports.add(node.module)
     return imports
+
+
+def _product_view_state(product_id: int) -> ProductViewState:
+    return ProductViewState(
+        product_id=product_id,
+        name=f"Produkt {product_id}",
+        price_text="1,00 zł/kg",
+        unit_text="kg",
+        button_text=f"Produkt {product_id}\n1,00 zł/kg",
+        icon_filename="fallback.png",
+    )

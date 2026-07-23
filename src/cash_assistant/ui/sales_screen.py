@@ -1,6 +1,6 @@
 """Minimal PySide6 sales screen."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt
@@ -38,10 +38,14 @@ from cash_assistant.controller.labels import (
     SALES_CHANGE_LABEL,
     SALES_CLEAR_CART_BUTTON_TEXT,
     SALES_CONFIRM_BUTTON_TEXT,
+    SALES_NEXT_PRODUCTS_PAGE_BUTTON_TEXT,
+    SALES_NEXT_PRODUCTS_PAGE_TOOLTIP,
     SALES_PAID_INPUT_LABEL,
     SALES_PAID_LABEL,
     SALES_PAYMENT_STATUS_ENTER_AMOUNT_TEXT,
     SALES_PAYMENT_STATUS_TOO_LOW_TEXT,
+    SALES_PREVIOUS_PRODUCTS_PAGE_BUTTON_TEXT,
+    SALES_PREVIOUS_PRODUCTS_PAGE_TOOLTIP,
     SALES_PRODUCTS_GROUP_TITLE,
     SALES_QUANTITY_LABEL,
     SALES_REMOVE_LAST_BUTTON_TEXT,
@@ -56,6 +60,10 @@ from cash_assistant.controller.view_state import AppState, ProductViewState, Vie
 
 PRODUCTS_ASSETS_PATH = Path(__file__).resolve().parents[3] / "assets" / "products"
 FALLBACK_ICON_FILENAME = "fallback.png"
+PRODUCTS_PER_PAGE = 9
+PRODUCTS_GRID_COLUMNS = 3
+PRODUCTS_NAVIGATION_COLUMN = 3
+PRODUCTS_NAVIGATION_WIDTH = 56
 
 
 class SalesScreen(QWidget):
@@ -65,11 +73,16 @@ class SalesScreen(QWidget):
         self._keyboard_controller = KeyboardController(controller)
         self._view_state = controller.prepare_view_state()
         self._product_buttons: list[QPushButton] = []
+        self._product_page_index = 0
         self._quantity_digits = ""
         self._is_refreshing = False
 
         self._title_label = QLabel(SALES_SCREEN_TITLE)
         self._products_layout = QGridLayout()
+        self._products_layout.setColumnMinimumWidth(
+            PRODUCTS_NAVIGATION_COLUMN,
+            PRODUCTS_NAVIGATION_WIDTH,
+        )
         self._cart_table = self._create_cart_table()
         self._quantity_input = self._create_quantity_input()
         self._payment_input = self._create_payment_input()
@@ -83,6 +96,16 @@ class SalesScreen(QWidget):
         self._remove_last_button = QPushButton(SALES_REMOVE_LAST_BUTTON_TEXT)
         self._clear_cart_button = QPushButton(SALES_CLEAR_CART_BUTTON_TEXT)
         self._start_payment_button = QPushButton(SALES_START_PAYMENT_BUTTON_TEXT)
+        self._previous_products_page_button = QPushButton(
+            SALES_PREVIOUS_PRODUCTS_PAGE_BUTTON_TEXT
+        )
+        self._previous_products_page_button.setToolTip(
+            SALES_PREVIOUS_PRODUCTS_PAGE_TOOLTIP
+        )
+        self._next_products_page_button = QPushButton(
+            SALES_NEXT_PRODUCTS_PAGE_BUTTON_TEXT
+        )
+        self._next_products_page_button.setToolTip(SALES_NEXT_PRODUCTS_PAGE_TOOLTIP)
         self._confirm_selection_button = QPushButton(SALES_CONFIRM_BUTTON_TEXT)
         self._cancel_selection_button = QPushButton(SALES_CANCEL_BUTTON_TEXT)
         self._save_sale_button = QPushButton(SALES_SAVE_BUTTON_TEXT)
@@ -153,6 +176,10 @@ class SalesScreen(QWidget):
         self._start_payment_button.clicked.connect(
             lambda: self._run_controller_action(self._controller.start_payment)
         )
+        self._previous_products_page_button.clicked.connect(
+            self._show_previous_product_page
+        )
+        self._next_products_page_button.clicked.connect(self._show_next_product_page)
         self._confirm_selection_button.clicked.connect(self._confirm_current_action)
         self._cancel_selection_button.clicked.connect(
             lambda: self._run_keyboard_command(Command.CANCEL)
@@ -162,6 +189,8 @@ class SalesScreen(QWidget):
     def _refresh_products_panel(self, view_state: ViewState) -> None:
         self._clear_products_layout()
         self._product_buttons.clear()
+        self._previous_products_page_button.setVisible(False)
+        self._next_products_page_button.setVisible(False)
 
         if view_state.app_state is AppState.ENTERING_QUANTITY:
             self._refresh_piece_quantity_panel(view_state)
@@ -178,7 +207,12 @@ class SalesScreen(QWidget):
         self._refresh_product_buttons(view_state.products)
 
     def _refresh_product_buttons(self, products: tuple[ProductViewState, ...]) -> None:
-        for index, product in enumerate(products):
+        page_count = _product_page_count(len(products))
+        self._product_page_index = min(self._product_page_index, page_count - 1)
+        page_products = _products_for_page(products, self._product_page_index)
+        self._keyboard_controller.set_products(page_products)
+
+        for index, product in enumerate(page_products):
             button = QPushButton(product.button_text)
             button.setMinimumHeight(72)
             button.setIcon(QIcon(str(_product_icon_path(product.icon_filename))))
@@ -190,7 +224,45 @@ class SalesScreen(QWidget):
                 )
             )
             self._product_buttons.append(button)
-            self._products_layout.addWidget(button, index // 3, index % 3)
+            self._products_layout.addWidget(
+                button,
+                index // PRODUCTS_GRID_COLUMNS,
+                index % PRODUCTS_GRID_COLUMNS,
+            )
+
+        self._refresh_product_page_controls(page_count)
+
+    def _refresh_product_page_controls(self, page_count: int) -> None:
+        has_multiple_pages = page_count > 1
+        self._previous_products_page_button.setVisible(has_multiple_pages)
+        self._next_products_page_button.setVisible(has_multiple_pages)
+        self._previous_products_page_button.setEnabled(self._product_page_index > 0)
+        self._next_products_page_button.setEnabled(
+            self._product_page_index < page_count - 1
+        )
+        self._products_layout.addWidget(
+            self._previous_products_page_button,
+            0,
+            PRODUCTS_NAVIGATION_COLUMN,
+        )
+        self._products_layout.addWidget(
+            self._next_products_page_button,
+            2,
+            PRODUCTS_NAVIGATION_COLUMN,
+        )
+
+    def _show_previous_product_page(self) -> None:
+        if self._product_page_index == 0:
+            return
+        self._product_page_index -= 1
+        self.refresh()
+
+    def _show_next_product_page(self) -> None:
+        last_page_index = _product_page_count(len(self._view_state.products)) - 1
+        if self._product_page_index >= last_page_index:
+            return
+        self._product_page_index += 1
+        self.refresh()
 
     def _refresh_piece_quantity_panel(self, view_state: ViewState) -> None:
         self._selected_product_value.setText(_selected_product_text(view_state))
@@ -430,6 +502,22 @@ def _product_icon_path(icon_filename: str) -> Path:
     if candidate.is_file():
         return candidate
     return PRODUCTS_ASSETS_PATH / FALLBACK_ICON_FILENAME
+
+
+def _product_page_count(product_count: int) -> int:
+    if product_count < 0:
+        raise ValueError("product_count cannot be negative")
+    return max(1, (product_count + PRODUCTS_PER_PAGE - 1) // PRODUCTS_PER_PAGE)
+
+
+def _products_for_page(
+    products: Sequence[ProductViewState],
+    page_index: int,
+) -> tuple[ProductViewState, ...]:
+    if page_index < 0:
+        raise ValueError("page_index cannot be negative")
+    start = page_index * PRODUCTS_PER_PAGE
+    return tuple(products[start : start + PRODUCTS_PER_PAGE])
 
 
 def _command_from_key_event(event: QKeyEvent) -> tuple[Command, object | None] | None:

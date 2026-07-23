@@ -222,6 +222,33 @@ def test_shortcut_number_is_not_treated_as_product_id(
     assert result.cart_items[0].product_id == first_slot_product_id
 
 
+def test_shortcut_uses_products_from_current_page(
+    app_controller: AppController,
+    scale: MockScale,
+) -> None:
+    product_ids = [
+        create_weighted_product(
+            app_controller,
+            name=f"Product {index}",
+            sort_order=index,
+        )
+        for index in range(11)
+    ]
+    current_page_products = app_controller.prepare_view_state().products[9:]
+    keyboard_controller = KeyboardController(app_controller=app_controller)
+    keyboard_controller.set_products(current_page_products)
+    scale.set_weight_grams(1_000)
+
+    selected_result = keyboard_controller.handle(Command.DIGIT_TYPED, "1")
+    result = keyboard_controller.handle(Command.CONFIRM)
+
+    assert isinstance(selected_result, ViewState)
+    assert selected_result.selected_product is not None
+    assert selected_result.selected_product.product_id == product_ids[9]
+    assert isinstance(result, ViewState)
+    assert result.cart_items[0].product_id == product_ids[9]
+
+
 def test_start_payment_and_digits_calculate_change(
     app_controller: AppController,
     keyboard_controller: KeyboardController,
