@@ -1,0 +1,7 @@
+INFORMACJA O MODYFIKACJACH
+
+Wszystkie pliki PNG w katalogu png/ są utworami pochodnymi zasobów SVG Noto Emoji: zostały przekonwertowane do PNG, przycięte według kanału alfa, przeskalowane i wyśrodkowane na przezroczystym płótnie 256×256.
+
+Dodatkowe modyfikacje wybranych ikon (zmiana barw, proporcji lub kompozycja) są opisane osobno przy każdym pliku w MAPOWANIE.csv.
+
+Zmiany wykonano 2026-07-22 na potrzeby zestawu ikon produktów. Google ani twórcy Noto nie zatwierdzają ani nie sponsorują tych adaptacji.
