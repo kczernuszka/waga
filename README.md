@@ -36,7 +36,10 @@ Jeszcze niezaimplementowane:
 - GUI ma korzystać z `AppController`, `KeyboardController` i DTO/ViewState.
 - GUI nie powinno importować modeli domenowych z `core/`.
 - Produkty są zarządzane przez `config/products.csv`, nie przez GUI.
-- Brak produktu w CSV nie usuwa go z SQLite; ukrycie wymaga `active=false`.
+- CSV jest źródłem prawdy: brak kodu produktu w pliku usuwa produkt z SQLite,
+  a ukrycie bez usuwania wymaga `active=false`.
+- Usunięcie produktu zachowuje historyczne `sale_items`; ich `product_id`
+  zmienia się na `NULL`, a snapshot kodu, nazwy, jednostki i ceny pozostaje.
 - Teksty widoczne w GUI trzymamy w warstwie `controller/presentation`, obecnie w `controller/labels.py` i ViewState.
 
 ## Dokumentacja

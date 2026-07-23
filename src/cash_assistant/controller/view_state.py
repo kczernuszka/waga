@@ -56,6 +56,7 @@ class CartItemViewState:
 @dataclass(frozen=True)
 class SaleItemViewState:
     product_id: int | None
+    product_code: str
     product_name: str
     unit_price_text: str
     quantity_text: str
@@ -141,12 +142,13 @@ def build_cart_item_view_state(item: CartItem) -> CartItemViewState:
 
 
 def build_sale_item_view_state(item: SaleItem) -> SaleItemViewState:
-    unit_text = _format_unit_type(item.unit_type_snapshot)
+    unit_text = _format_unit_type(item.unit_snapshot)
     return SaleItemViewState(
         product_id=item.product_id,
+        product_code=item.product_code_snapshot,
         product_name=item.product_name_snapshot,
         unit_price_text=_format_unit_price(item.unit_price_grosze_snapshot, unit_text),
-        quantity_text=_format_quantity(item.unit_type_snapshot, item.quantity_value),
+        quantity_text=_format_quantity(item.unit_snapshot, item.quantity_value),
         line_total_text=_format_money(item.line_total_grosze),
     )
 

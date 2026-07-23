@@ -24,6 +24,7 @@ from cash_assistant.controller.labels import (
     HISTORY_CREATED_AT_COLUMN,
     HISTORY_CREATED_AT_LABEL,
     HISTORY_DETAILS_GROUP_TITLE,
+    HISTORY_ITEM_CODE_COLUMN,
     HISTORY_ITEMS_COUNT_COLUMN,
     HISTORY_ITEMS_GROUP_TITLE,
     HISTORY_LIST_GROUP_TITLE,
@@ -209,10 +210,11 @@ class HistoryScreen(QWidget):
 
         self._items_table.setRowCount(len(details.items))
         for row, item in enumerate(details.items):
-            self._items_table.setItem(row, 0, QTableWidgetItem(item.product_name))
-            self._items_table.setItem(row, 1, QTableWidgetItem(item.quantity_text))
-            self._items_table.setItem(row, 2, QTableWidgetItem(item.unit_price_text))
-            self._items_table.setItem(row, 3, QTableWidgetItem(item.line_total_text))
+            self._items_table.setItem(row, 0, QTableWidgetItem(item.product_code))
+            self._items_table.setItem(row, 1, QTableWidgetItem(item.product_name))
+            self._items_table.setItem(row, 2, QTableWidgetItem(item.quantity_text))
+            self._items_table.setItem(row, 3, QTableWidgetItem(item.unit_price_text))
+            self._items_table.setItem(row, 4, QTableWidgetItem(item.line_total_text))
         self._items_table.resizeColumnsToContents()
 
     def _clear_details(self) -> None:
@@ -242,9 +244,10 @@ class HistoryScreen(QWidget):
         return table
 
     def _create_items_table(self) -> QTableWidget:
-        table = QTableWidget(0, 4)
+        table = QTableWidget(0, 5)
         table.setHorizontalHeaderLabels(
             [
+                HISTORY_ITEM_CODE_COLUMN,
                 SALES_CART_PRODUCT_COLUMN,
                 SALES_CART_QUANTITY_COLUMN,
                 SALES_CART_UNIT_PRICE_COLUMN,

@@ -13,6 +13,7 @@ from cash_assistant.core.product import Product, UnitType
 @dataclass(frozen=True)
 class CartItem:
     product_id: int | None
+    product_code_snapshot: str
     product_name_snapshot: str
     unit_type_snapshot: UnitType
     unit_price_grosze_snapshot: int
@@ -48,6 +49,7 @@ class Cart:
 
         item = CartItem(
             product_id=product.id,
+            product_code_snapshot=product.code,
             product_name_snapshot=product.name,
             unit_type_snapshot=product.unit_type,
             unit_price_grosze_snapshot=product.price_grosze,
@@ -66,6 +68,7 @@ class Cart:
 
         item = CartItem(
             product_id=product.id,
+            product_code_snapshot=product.code,
             product_name_snapshot=product.name,
             unit_type_snapshot=product.unit_type,
             unit_price_grosze_snapshot=product.price_grosze,

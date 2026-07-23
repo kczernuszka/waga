@@ -8,6 +8,7 @@ from cash_assistant.core.cart import Cart
 from cash_assistant.core.product import Product, UnitType
 from cash_assistant.core.sale import Sale, SaleItem
 from cash_assistant.data.database import initialize_schema
+from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
 
 POLAND_TIME_ZONE = ZoneInfo("Europe/Warsaw")
@@ -17,6 +18,9 @@ POLAND_TIME_ZONE = ZoneInfo("Europe/Warsaw")
 def connection() -> sqlite3.Connection:
     connection = sqlite3.connect(":memory:")
     initialize_schema(connection)
+    product_repository = ProductRepository(connection)
+    product_repository.create_product(weighted_product())
+    product_repository.create_product(piece_product())
     return connection
 
 
@@ -66,16 +70,18 @@ def test_save_sale_returns_sale_with_database_id_and_keeps_items(
         items=(
             SaleItem(
                 product_id=1,
+                product_code_snapshot="jablka",
                 product_name_snapshot="Jabłka",
-                unit_type_snapshot=UnitType.KG,
+                unit_snapshot=UnitType.KG,
                 unit_price_grosze_snapshot=699,
                 quantity_value=1_500,
                 line_total_grosze=1_049,
             ),
             SaleItem(
                 product_id=2,
+                product_code_snapshot="bulka",
                 product_name_snapshot="Bułka",
-                unit_type_snapshot=UnitType.PIECE,
+                unit_snapshot=UnitType.PIECE,
                 unit_price_grosze_snapshot=120,
                 quantity_value=3,
                 line_total_grosze=360,
@@ -164,12 +170,14 @@ def test_save_sale_rolls_back_sale_when_saving_items_fails(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sale_id INTEGER NOT NULL,
             product_id INTEGER,
+            product_code_snapshot TEXT NOT NULL,
             product_name_snapshot TEXT NOT NULL,
-            unit_type_snapshot TEXT NOT NULL,
+            unit_snapshot TEXT NOT NULL,
             unit_price_grosze_snapshot INTEGER NOT NULL,
             quantity_value INTEGER NOT NULL CHECK (quantity_value < 0),
             line_total_grosze INTEGER NOT NULL,
-            FOREIGN KEY (sale_id) REFERENCES sales(id)
+            FOREIGN KEY (sale_id) REFERENCES sales(id),
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
         )
         """
     )

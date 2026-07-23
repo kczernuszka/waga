@@ -161,6 +161,7 @@ Koszyk przechowuje bieżące pozycje sprzedaży.
 `CartItem` jest snapshotem produktu:
 
 - `product_id`
+- `product_code_snapshot`
 - `product_name_snapshot`
 - `unit_type_snapshot`
 - `unit_price_grosze_snapshot`
@@ -175,7 +176,9 @@ Dla `UnitType.PIECE` pole `quantity_value` oznacza liczbę sztuk.
 
 `Sale` reprezentuje zakończoną sprzedaż. Powstaje z koszyka oraz kwoty otrzymanej od klienta.
 
-`SaleItem` jest snapshotem pozycji koszyka. Zmiana produktu po sprzedaży nie zmienia historii sprzedaży.
+`SaleItem` jest snapshotem pozycji koszyka i zawiera `product_code_snapshot`,
+`product_name_snapshot`, `unit_snapshot` oraz `unit_price_grosze_snapshot`.
+Zmiana albo usunięcie produktu po sprzedaży nie zmienia historii sprzedaży.
 
 ## `data/`
 
@@ -219,8 +222,9 @@ Synchronizator:
 - waliduje cały plik przed rozpoczęciem zapisu,
 - mapuje jednostki CSV `kg` i `szt` na `UnitType`,
 - wykonuje upsert po `code`,
-- nie usuwa rekordów nieobecnych w CSV,
-- zapisuje wszystkie zmiany w jednej transakcji.
+- usuwa z `products` rekordy, których kodów nie ma w CSV,
+- zachowuje rekordy z `active=false`, ale nie pokazuje ich w sprzedaży,
+- wykonuje wszystkie operacje `INSERT`, `UPDATE` i `DELETE` w jednej transakcji.
 
 ### `sale_repository.py`
 
@@ -231,6 +235,10 @@ Repozytorium sprzedaży obsługuje:
 - odczyt szczegółów sprzedaży.
 
 Zapis sprzedaży jest transakcyjny. Jeśli zapis pozycji sprzedaży się nie powiedzie, rekord `sales` nie powinien zostać w bazie.
+
+`sale_items.product_id` jest nullable i ma klucz obcy do `products(id)` z
+`ON DELETE SET NULL`. Powiązanie nie używa `ON DELETE CASCADE`. Historia i DTO
+raportowe identyfikują produkt przez trwały `product_code_snapshot`.
 
 ## `hardware/`
 

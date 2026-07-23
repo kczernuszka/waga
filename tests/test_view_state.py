@@ -3,14 +3,16 @@ from datetime import UTC, datetime
 from cash_assistant.controller.view_state import (
     CartItemViewState,
     ProductViewState,
+    SaleItemViewState,
     SaleSummaryViewState,
     build_cart_item_view_state,
     build_product_view_state,
+    build_sale_item_view_state,
     build_sale_summary_view_state,
 )
 from cash_assistant.core.cart import CartItem
 from cash_assistant.core.product import Product, UnitType
-from cash_assistant.core.sale import Sale
+from cash_assistant.core.sale import Sale, SaleItem
 
 
 def test_build_product_view_state_for_weighted_product() -> None:
@@ -57,6 +59,7 @@ def test_build_cart_item_view_state() -> None:
     assert build_cart_item_view_state(
         CartItem(
             product_id=1,
+            product_code_snapshot="jablka",
             product_name_snapshot="Jabłka",
             unit_type_snapshot=UnitType.KG,
             unit_price_grosze_snapshot=699,
@@ -65,6 +68,27 @@ def test_build_cart_item_view_state() -> None:
         )
     ) == CartItemViewState(
         product_id=1,
+        product_name="Jabłka",
+        unit_price_text="6,99 zł/kg",
+        quantity_text="1,50 kg",
+        line_total_text="10,49 zł",
+    )
+
+
+def test_build_sale_item_view_state_uses_code_snapshot_after_product_deletion() -> None:
+    assert build_sale_item_view_state(
+        SaleItem(
+            product_id=None,
+            product_code_snapshot="jablka",
+            product_name_snapshot="Jabłka",
+            unit_snapshot=UnitType.KG,
+            unit_price_grosze_snapshot=699,
+            quantity_value=1_500,
+            line_total_grosze=1_049,
+        )
+    ) == SaleItemViewState(
+        product_id=None,
+        product_code="jablka",
         product_name="Jabłka",
         unit_price_text="6,99 zł/kg",
         quantity_text="1,50 kg",

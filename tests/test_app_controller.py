@@ -113,6 +113,14 @@ def add_weighted_product_to_cart(controller: AppController, product_id: int) -> 
     controller.add_selected_weighted_product()
 
 
+def product_code(controller: AppController, product_id: int) -> str:
+    repository = controller._product_repository
+    assert repository is not None
+    product = repository.get_product(product_id)
+    assert product is not None
+    return product.code
+
+
 def test_public_api_does_not_expose_old_domain_methods() -> None:
     forbidden_public_names = {
         "cart",
@@ -392,6 +400,7 @@ def test_save_sale_uses_sale_repository_and_starts_new_cart(
         items=(
             SaleItemViewState(
                 product_id=weighted_product_id,
+                product_code=product_code(controller, weighted_product_id),
                 product_name="Apples",
                 unit_price_text="6,99 zł/kg",
                 quantity_text="1,50 kg",
@@ -399,6 +408,7 @@ def test_save_sale_uses_sale_repository_and_starts_new_cart(
             ),
             SaleItemViewState(
                 product_id=piece_product_id,
+                product_code=product_code(controller, piece_product_id),
                 product_name="Roll",
                 unit_price_text="1,20 zł/szt.",
                 quantity_text="3 szt.",
@@ -563,6 +573,7 @@ def test_history_sale_details_returns_view_state(
         items=(
             SaleItemViewState(
                 product_id=weighted_product_id,
+                product_code=product_code(controller, weighted_product_id),
                 product_name="Apples",
                 unit_price_text="6,99 zł/kg",
                 quantity_text="1,50 kg",
@@ -570,6 +581,7 @@ def test_history_sale_details_returns_view_state(
             ),
             SaleItemViewState(
                 product_id=piece_product_id,
+                product_code=product_code(controller, piece_product_id),
                 product_name="Roll",
                 unit_price_text="1,20 zł/szt.",
                 quantity_text="3 szt.",

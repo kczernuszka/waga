@@ -35,6 +35,7 @@ def test_add_weighted_product_creates_cart_item_with_product_snapshot() -> None:
 
     assert item == CartItem(
         product_id=1,
+        product_code_snapshot="jablka",
         product_name_snapshot="Jabłka",
         unit_type_snapshot=UnitType.KG,
         unit_price_grosze_snapshot=699,
@@ -51,6 +52,7 @@ def test_add_piece_product_creates_cart_item_with_product_snapshot() -> None:
 
     assert item == CartItem(
         product_id=2,
+        product_code_snapshot="bulka",
         product_name_snapshot="Bułka",
         unit_type_snapshot=UnitType.PIECE,
         unit_price_grosze_snapshot=120,

@@ -32,12 +32,14 @@ CREATE TABLE IF NOT EXISTS sale_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sale_id INTEGER NOT NULL,
     product_id INTEGER,
+    product_code_snapshot TEXT NOT NULL,
     product_name_snapshot TEXT NOT NULL,
-    unit_type_snapshot TEXT NOT NULL,
+    unit_snapshot TEXT NOT NULL,
     unit_price_grosze_snapshot INTEGER NOT NULL,
     quantity_value INTEGER NOT NULL,
     line_total_grosze INTEGER NOT NULL,
-    FOREIGN KEY (sale_id) REFERENCES sales(id)
+    FOREIGN KEY (sale_id) REFERENCES sales(id),
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 """
 
@@ -54,6 +56,7 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
     """Create the MVP schema on an existing connection."""
     connection.executescript(SCHEMA_SQL)
     _migrate_products_schema(connection)
+    _migrate_sale_items_schema(connection)
     connection.commit()
 
 
@@ -143,3 +146,90 @@ def _unique_legacy_code(name: str, product_id: int, used_codes: set[str]) -> str
     if candidate in used_codes:
         candidate = f"{base_code}-{product_id}"
     return candidate
+
+
+def _migrate_sale_items_schema(connection: sqlite3.Connection) -> None:
+    column_rows = connection.execute("PRAGMA table_info(sale_items)").fetchall()
+    columns = {str(row[1]): row for row in column_rows}
+    foreign_keys = connection.execute("PRAGMA foreign_key_list(sale_items)").fetchall()
+    has_product_set_null = any(
+        str(row[2]) == "products"
+        and str(row[3]) == "product_id"
+        and str(row[6]).upper() == "SET NULL"
+        for row in foreign_keys
+    )
+    product_id_is_nullable = (
+        "product_id" in columns and not bool(columns["product_id"][3])
+    )
+    schema_is_current = (
+        "product_code_snapshot" in columns
+        and "unit_snapshot" in columns
+        and "unit_type_snapshot" not in columns
+        and product_id_is_nullable
+        and has_product_set_null
+    )
+    if schema_is_current:
+        return
+
+    if "unit_snapshot" in columns:
+        unit_expression = "si.unit_snapshot"
+    elif "unit_type_snapshot" in columns:
+        unit_expression = "si.unit_type_snapshot"
+    else:
+        raise RuntimeError("sale_items has no unit snapshot column")
+
+    if "product_code_snapshot" in columns:
+        code_expression = "NULLIF(trim(si.product_code_snapshot), '')"
+    else:
+        code_expression = "NULL"
+
+    connection.execute("DROP TABLE IF EXISTS sale_items_migrated")
+    connection.execute(
+        """
+        CREATE TABLE sale_items_migrated (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sale_id INTEGER NOT NULL,
+            product_id INTEGER,
+            product_code_snapshot TEXT NOT NULL,
+            product_name_snapshot TEXT NOT NULL,
+            unit_snapshot TEXT NOT NULL,
+            unit_price_grosze_snapshot INTEGER NOT NULL,
+            quantity_value INTEGER NOT NULL,
+            line_total_grosze INTEGER NOT NULL,
+            FOREIGN KEY (sale_id) REFERENCES sales(id),
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
+        )
+        """
+    )
+    connection.execute(
+        f"""
+        INSERT INTO sale_items_migrated (
+            id,
+            sale_id,
+            product_id,
+            product_code_snapshot,
+            product_name_snapshot,
+            unit_snapshot,
+            unit_price_grosze_snapshot,
+            quantity_value,
+            line_total_grosze
+        )
+        SELECT si.id,
+               si.sale_id,
+               p.id,
+               COALESCE(
+                   {code_expression},
+                   p.code,
+                   'legacy-sale-item-' || si.id
+               ),
+               si.product_name_snapshot,
+               {unit_expression},
+               si.unit_price_grosze_snapshot,
+               si.quantity_value,
+               si.line_total_grosze
+        FROM sale_items AS si
+        LEFT JOIN products AS p ON p.id = si.product_id
+        """
+    )
+    connection.execute("DROP TABLE sale_items")
+    connection.execute("ALTER TABLE sale_items_migrated RENAME TO sale_items")

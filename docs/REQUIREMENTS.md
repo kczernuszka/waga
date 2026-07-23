@@ -69,8 +69,9 @@ Przed zapisem cały plik jest walidowany. `code` musi być niepusty i unikalny,
 całkowitą.
 
 Synchronizacja wykonuje transakcyjny upsert po `code`. Produkt nieobecny w CSV
-nie jest usuwany ani automatycznie dezaktywowany. Grafiki produktów znajdują się
-w `assets/products`; brak wskazanego pliku zastępuje `fallback.png`.
+jest fizycznie usuwany z tabeli `products`. Wartość `active=false` zachowuje
+produkt w bazie, ale ukrywa go na ekranie sprzedaży. Grafiki produktów znajdują
+się w `assets/products`; brak wskazanego pliku zastępuje `fallback.png`.
 
 ### Koszyk
 
@@ -189,6 +190,18 @@ Sprzedaż zawiera:
 
 Pozycje sprzedaży zawierają snapshot danych produktu, aby późniejsza zmiana ceny albo nazwy nie zmieniała historii.
 
+Snapshot pozycji sprzedaży zawiera:
+
+- `product_code_snapshot`,
+- `product_name_snapshot`,
+- `unit_snapshot`,
+- `unit_price_grosze_snapshot`.
+
+`sale_items.product_id` jest opcjonalnym powiązaniem technicznym. Klucz obcy
+używa `ON DELETE SET NULL`, nigdy `ON DELETE CASCADE`. Raporty historyczne
+identyfikują produkt przez `product_code_snapshot`, więc usunięcie produktu
+z `products` nie usuwa ani nie zmienia pozycji sprzedaży.
+
 GUI historii nie może operować bezpośrednio na `Sale` ani `SaleItem`. Ma korzystać z DTO:
 
 - `SaleSummaryViewState`,
@@ -209,9 +222,9 @@ Nie używać ORM w MVP. Preferowane jest `sqlite3` z biblioteki standardowej.
 
 Zapis sprzedaży musi być transakcyjny: jeśli zapis pozycji się nie uda, rekord sprzedaży nie zostaje w bazie.
 
-Synchronizacja produktów również musi być transakcyjna: jeśli którykolwiek
-upsert się nie uda, żaden produkt z danego przebiegu synchronizacji nie zostaje
-zapisany.
+Synchronizacja produktów również musi być transakcyjna: walidacja całego CSV
+odbywa się przed zapisem, a wszystkie operacje `INSERT`, `UPDATE` i `DELETE`
+wchodzą do jednej transakcji.
 
 ### Mock wagi
 

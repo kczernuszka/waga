@@ -50,20 +50,22 @@ class SaleRepository:
                 INSERT INTO sale_items (
                     sale_id,
                     product_id,
+                    product_code_snapshot,
                     product_name_snapshot,
-                    unit_type_snapshot,
+                    unit_snapshot,
                     unit_price_grosze_snapshot,
                     quantity_value,
                     line_total_grosze
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
                         sale_id,
                         item.product_id,
+                        item.product_code_snapshot,
                         item.product_name_snapshot,
-                        item.unit_type_snapshot.value,
+                        item.unit_snapshot.value,
                         item.unit_price_grosze_snapshot,
                         item.quantity_value,
                         item.line_total_grosze,
@@ -120,8 +122,9 @@ class SaleRepository:
         rows = self._connection.execute(
             """
             SELECT product_id,
+                   product_code_snapshot,
                    product_name_snapshot,
-                   unit_type_snapshot,
+                   unit_snapshot,
                    unit_price_grosze_snapshot,
                    quantity_value,
                    line_total_grosze
@@ -138,8 +141,9 @@ def _row_to_sale_item(row: sqlite3.Row) -> SaleItem:
     product_id = row["product_id"]
     return SaleItem(
         product_id=None if product_id is None else int(product_id),
+        product_code_snapshot=str(row["product_code_snapshot"]),
         product_name_snapshot=str(row["product_name_snapshot"]),
-        unit_type_snapshot=UnitType(str(row["unit_type_snapshot"])),
+        unit_snapshot=UnitType(str(row["unit_snapshot"])),
         unit_price_grosze_snapshot=int(row["unit_price_grosze_snapshot"]),
         quantity_value=int(row["quantity_value"]),
         line_total_grosze=int(row["line_total_grosze"]),

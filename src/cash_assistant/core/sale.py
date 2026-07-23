@@ -11,8 +11,9 @@ from cash_assistant.core.product import UnitType
 @dataclass(frozen=True)
 class SaleItem:
     product_id: int | None
+    product_code_snapshot: str
     product_name_snapshot: str
-    unit_type_snapshot: UnitType
+    unit_snapshot: UnitType
     unit_price_grosze_snapshot: int
     quantity_value: int
     line_total_grosze: int
@@ -57,8 +58,9 @@ class Sale:
             items=tuple(
                 SaleItem(
                     product_id=item.product_id,
+                    product_code_snapshot=item.product_code_snapshot,
                     product_name_snapshot=item.product_name_snapshot,
-                    unit_type_snapshot=item.unit_type_snapshot,
+                    unit_snapshot=item.unit_type_snapshot,
                     unit_price_grosze_snapshot=item.unit_price_grosze_snapshot,
                     quantity_value=item.quantity_value,
                     line_total_grosze=item.line_total_grosze,

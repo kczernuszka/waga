@@ -64,8 +64,9 @@ def test_create_sale_from_weighted_cart() -> None:
     assert sale.items == (
         sale_module.SaleItem(
             product_id=1,
+            product_code_snapshot="jablka",
             product_name_snapshot="Jabłka",
-            unit_type_snapshot=UnitType.KG,
+            unit_snapshot=UnitType.KG,
             unit_price_grosze_snapshot=699,
             quantity_value=1_500,
             line_total_grosze=1_049,
@@ -83,16 +84,18 @@ def test_create_sale_from_mixed_cart_with_kg_and_piece_products() -> None:
     assert sale.items == (
         sale_module.SaleItem(
             product_id=1,
+            product_code_snapshot="jablka",
             product_name_snapshot="Jabłka",
-            unit_type_snapshot=UnitType.KG,
+            unit_snapshot=UnitType.KG,
             unit_price_grosze_snapshot=699,
             quantity_value=1_500,
             line_total_grosze=1_049,
         ),
         sale_module.SaleItem(
             product_id=2,
+            product_code_snapshot="bulka",
             product_name_snapshot="Bułka",
-            unit_type_snapshot=UnitType.PIECE,
+            unit_snapshot=UnitType.PIECE,
             unit_price_grosze_snapshot=120,
             quantity_value=3,
             line_total_grosze=360,
@@ -141,8 +144,9 @@ def test_sale_keeps_snapshot_of_cart_items() -> None:
     assert sale.items == (
         sale_module.SaleItem(
             product_id=1,
+            product_code_snapshot="jablka",
             product_name_snapshot="Jabłka",
-            unit_type_snapshot=UnitType.KG,
+            unit_snapshot=UnitType.KG,
             unit_price_grosze_snapshot=699,
             quantity_value=1_500,
             line_total_grosze=1_049,

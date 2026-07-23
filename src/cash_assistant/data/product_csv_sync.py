@@ -44,6 +44,19 @@ def synchronize_products_from_csv(
     records = read_product_csv(csv_path)
 
     with transaction(connection):
+        connection.execute(
+            """
+            CREATE TEMP TABLE IF NOT EXISTS synchronized_product_codes (
+                code TEXT PRIMARY KEY
+            )
+            """
+        )
+        connection.execute("DELETE FROM synchronized_product_codes")
+        connection.executemany(
+            "INSERT INTO synchronized_product_codes (code) VALUES (?)",
+            [(record.code,) for record in records],
+        )
+
         for record in records:
             connection.execute(
                 """
@@ -75,6 +88,17 @@ def synchronize_products_from_csv(
                     record.icon_filename,
                 ),
             )
+
+        connection.execute(
+            """
+            DELETE FROM products
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM synchronized_product_codes
+                WHERE synchronized_product_codes.code = products.code
+            )
+            """
+        )
 
     return len(records)
 
