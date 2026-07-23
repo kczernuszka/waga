@@ -6,8 +6,9 @@ Projekt jest lokalną aplikacją desktopową w Pythonie, docelowo uruchamianą n
 
 Aplikacja używa:
 
-- PySide6 do GUI, jeszcze niezaimplementowanego,
+- PySide6 do GUI,
 - SQLite do lokalnej bazy danych,
+- CSV jako źródła konfiguracji produktów,
 - czystej logiki domenowej w `core/`,
 - adapterów sprzętowych w `hardware/`,
 - kontrolerów i warstwy prezentacyjnej w `controller/`.
@@ -25,6 +26,7 @@ Logika domenowa: pieniądze, produkty, koszyk i zakończona sprzedaż. Ta warstw
 `data/`
 
 SQLite, schemat bazy i repozytoria. Repozytoria mapują dane między SQLite a modelami domenowymi.
+Ta warstwa zawiera również walidowany, transakcyjny synchronizator produktów z CSV.
 
 `hardware/`
 
@@ -72,6 +74,7 @@ src/cash_assistant/
 
   data/
     database.py
+    product_csv_sync.py
     product_repository.py
     sale_repository.py
 
@@ -89,11 +92,18 @@ src/cash_assistant/
     formatters.py
     main_window.py
     sales_screen.py
-    settings_screen.py
     history_screen.py
 ```
 
-`main.py` oraz ekrany w `ui/` są jeszcze stubami przed implementacją PySide6.
+Poza pakietem źródłowym:
+
+```text
+config/products.csv
+assets/products/*.png
+```
+
+`main.py` inicjalizuje bazę, synchronizuje konfigurację produktów, buduje
+kontroler i uruchamia okno PySide6.
 
 ## `core/`
 
@@ -134,11 +144,15 @@ Model domenowy produktu:
 Produkt ma:
 
 - `id: int | None`
+- `code: str`
 - `name: str`
 - `unit_type: UnitType`
 - `price_grosze: int`
 - `active: bool`
 - `sort_order: int`
+- `icon_filename: str`
+
+`code` jest stabilnym identyfikatorem używanym do synchronizacji z CSV.
 
 ### `cart.py`
 
@@ -194,6 +208,20 @@ Repozytorium produktów obsługuje:
 
 Repozytorium zwraca i przyjmuje modele domenowe, ponieważ należy do warstwy `data`, a nie do GUI.
 
+Kod produktu jest unikalny w SQLite i nie może zostać zmieniony przez zwykłą
+aktualizację produktu.
+
+### `product_csv_sync.py`
+
+Synchronizator:
+
+- odczytuje `config/products.csv`,
+- waliduje cały plik przed rozpoczęciem zapisu,
+- mapuje jednostki CSV `kg` i `szt` na `UnitType`,
+- wykonuje upsert po `code`,
+- nie usuwa rekordów nieobecnych w CSV,
+- zapisuje wszystkie zmiany w jednej transakcji.
+
 ### `sale_repository.py`
 
 Repozytorium sprzedaży obsługuje:
@@ -235,16 +263,12 @@ Publiczne metody `AppController` nie powinny przyjmować ani zwracać modeli dom
 
 Publiczne API:
 
-- `list_products_for_settings() -> list[ProductListItemViewState]`
-- `prepare_product_edit_view_state(product_id: int | None = None) -> ProductEditViewState`
-- `save_product_from_input(product_input: ProductEditInput) -> ProductEditViewState`
 - `select_product_by_id(product_id: int) -> ViewState`
 - `add_selected_piece_product(quantity: int) -> ViewState`
 - `remove_last_item() -> ViewState`
 - `clear_cart() -> ViewState`
 - `start_payment() -> ViewState`
 - `cancel_current_operation() -> ViewState`
-- `open_settings() -> ViewState`
 - `open_history() -> ViewState`
 - `set_paid_grosze(paid_grosze: int) -> PaymentState`
 - `save_sale() -> SaleDetailsViewState`
@@ -273,13 +297,6 @@ Sprzedaż:
 - `CartItemViewState`
 - `PaymentState`
 
-Ustawienia produktów:
-
-- `ProductListItemViewState`
-- `ProductEditViewState`
-- `ProductEditInput`
-- `UnitOptionViewState`
-
 Historia sprzedaży:
 
 - `SaleSummaryViewState`
@@ -287,6 +304,9 @@ Historia sprzedaży:
 - `SaleItemViewState`
 
 Buildery ViewState przygotowują gotowe teksty widoczne w GUI. GUI nie powinno formatować jednostek na podstawie `UnitType`.
+
+`ProductViewState` zawiera również `icon_filename`, ale nie ujawnia modelu
+domenowego ani szczegółów SQLite.
 
 ### `labels.py`
 
@@ -304,18 +324,24 @@ Zasada: nowe napisy widoczne w GUI powinny trafiać do `controller/labels.py` al
 
 `ui/` odpowiada za PySide6.
 
-Aktualnie ekrany są stubami:
+Aktualne moduły:
 
 - `main_window.py`
 - `sales_screen.py`
-- `settings_screen.py`
 - `history_screen.py`
 
-Docelowo ekrany mają:
+Ekran sprzedaży jest podłączony do `MainWindow`. Moduł historii istnieje, ale
+nawigacja do niego pozostaje ukryta.
+
+Ekrany:
 
 - renderować DTO/ViewState z `controller/`,
 - wywoływać publiczne metody `AppController` albo komendy `KeyboardController`,
 - nie importować `core.Product`, `core.UnitType`, `core.Sale`, `core.SaleItem`.
+
+UI pobiera `icon_filename` z `ProductViewState` i szuka grafiki wyłącznie w
+`assets/products`. Jeśli pliku brakuje, używa `assets/products/fallback.png`.
+UI nie importuje CSV ani repozytoriów.
 
 ### `formatters.py`
 
@@ -338,6 +364,7 @@ Aktualny zakres testów:
 - `test_sale.py` — zakończona sprzedaż,
 - `test_database.py` — inicjalizacja bazy,
 - `test_product_repository.py` — repozytorium produktów,
+- `test_product_csv_sync.py` — import, aktualizacja, walidacja i transakcyjność CSV,
 - `test_sale_repository.py` — repozytorium sprzedaży i transakcyjność,
 - `test_scale.py` — interfejs i mock wagi,
 - `test_formatters.py` — pomocnicze formatowanie UI,
@@ -345,11 +372,10 @@ Aktualny zakres testów:
 - `test_app_controller.py` — publiczna fasada GUI,
 - `test_keyboard_controller.py` — komendy klawiatury.
 
-## Kolejny etap
-
-Przed implementacją GUI architektura jest przygotowana do modelu:
+## Przepływ aplikacji
 
 ```text
+config/products.csv -> product_csv_sync -> SQLite
 PySide6 screen -> AppController / KeyboardController -> ViewState DTO
 ```
 

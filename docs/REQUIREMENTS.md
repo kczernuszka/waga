@@ -33,29 +33,44 @@ Aplikacja nie jest certyfikowaną kasą fiskalną.
 
 Aplikacja musi umożliwiać:
 
-- dodawanie produktów,
-- edycję produktów,
-- dezaktywowanie produktów,
+- synchronizowanie produktów z pliku `config/products.csv`,
+- dodawanie i aktualizowanie produktów przez stabilne pole `code`,
+- dezaktywowanie produktów przez `active=false`,
 - ustawianie ceny produktu,
 - ustawianie jednostki produktu: kilogramy albo sztuki,
 - ustawianie kolejności wyświetlania produktów,
+- przypisywanie nazwy pliku ikony,
 - wyświetlanie aktywnych produktów jako przycisków w GUI.
 
 Produkt zawiera:
 
 - `id`,
+- `code`,
 - `name`,
 - `unit_type`,
 - `price_grosze`,
 - `active`,
-- `sort_order`.
+- `sort_order`,
+- `icon_filename`.
 
-GUI ustawień nie może operować bezpośrednio na `Product` ani `UnitType`. Ma korzystać z DTO:
+Plik CSV zawiera kolumny:
 
-- `ProductListItemViewState`,
-- `ProductEditViewState`,
-- `ProductEditInput`,
-- `UnitOptionViewState`.
+- `code`,
+- `name`,
+- `unit`,
+- `price_grosze`,
+- `active`,
+- `sort_order`,
+- `icon_filename`.
+
+Przed zapisem cały plik jest walidowany. `code` musi być niepusty i unikalny,
+`unit` może mieć wartość `kg` albo `szt`, cena musi być większa od zera,
+`active` ma wartość `true` albo `false`, a `sort_order` jest nieujemną liczbą
+całkowitą.
+
+Synchronizacja wykonuje transakcyjny upsert po `code`. Produkt nieobecny w CSV
+nie jest usuwany ani automatycznie dezaktywowany. Grafiki produktów znajdują się
+w `assets/products`; brak wskazanego pliku zastępuje `fallback.png`.
 
 ### Koszyk
 
@@ -194,6 +209,10 @@ Nie używać ORM w MVP. Preferowane jest `sqlite3` z biblioteki standardowej.
 
 Zapis sprzedaży musi być transakcyjny: jeśli zapis pozycji się nie uda, rekord sprzedaży nie zostaje w bazie.
 
+Synchronizacja produktów również musi być transakcyjna: jeśli którykolwiek
+upsert się nie uda, żaden produkt z danego przebiegu synchronizacji nie zostaje
+zapisany.
+
 ### Mock wagi
 
 Na etapie developmentu aplikacja działa bez prawdziwej wagi.
@@ -210,13 +229,11 @@ Docelowa implementacja prawdziwej wagi ma zostać dodana później jako osobny a
 
 ### GUI
 
-Aplikacja ma mieć GUI w PySide6, ale aktualny etap projektu przygotowuje warstwy pod GUI bez implementowania ekranów.
+Aplikacja ma GUI w PySide6.
 
-Wymagane ekrany MVP:
+Aktualnie główna nawigacja udostępnia:
 
-- ekran sprzedaży,
-- ekran ustawień produktów,
-- ekran historii sprzedaży.
+- ekran sprzedaży.
 
 GUI ma korzystać z publicznej fasady `AppController` i DTO/ViewState. GUI nie powinno importować:
 
@@ -226,6 +243,9 @@ GUI ma korzystać z publicznej fasady `AppController` i DTO/ViewState. GUI nie p
 - `core.CartItem`,
 - `core.Sale`,
 - `core.SaleItem`.
+
+GUI nie importuje modułu synchronizacji CSV ani repozytoriów. Konfiguracja
+produktów jest synchronizowana przed utworzeniem kontrolera i okna aplikacji.
 
 Wszystkie teksty widoczne w GUI powinny być przygotowane w warstwie `controller/presentation`, przede wszystkim przez `ViewState` i stałe z `controller/labels.py`.
 

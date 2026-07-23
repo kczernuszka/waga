@@ -10,18 +10,21 @@ Zaimplementowane:
 
 - logika pieniędzy, produktów, koszyka i sprzedaży w `core/`,
 - SQLite schema i repozytoria w `data/`,
+- walidowana i transakcyjna synchronizacja produktów z `config/products.csv`,
 - transakcyjny zapis sprzedaży,
 - interfejs wagi i mock wagi,
 - `AppController` jako publiczna fasada dla GUI,
 - `KeyboardController`,
-- DTO/ViewState dla sprzedaży, ustawień produktów i historii sprzedaży,
+- GUI PySide6 ekranu sprzedaży,
+- DTO/ViewState dla sprzedaży i historii sprzedaży,
+- ikony produktów z `assets/products`,
 - centralne etykiety GUI-visible w `controller/labels.py`,
 - testy automatyczne.
 
 Jeszcze niezaimplementowane:
 
-- ekrany PySide6,
-- uruchamialny bootstrap aplikacji w `main.py`,
+- docelowy wygląd ekranu sprzedaży,
+- udostępnienie ekranu historii w głównej nawigacji,
 - adapter prawdziwej wagi.
 
 ## Najważniejsze zasady
@@ -32,6 +35,8 @@ Jeszcze niezaimplementowane:
 - `core/` nie importuje `ui/`, `data/`, `hardware/` ani `controller/`.
 - GUI ma korzystać z `AppController`, `KeyboardController` i DTO/ViewState.
 - GUI nie powinno importować modeli domenowych z `core/`.
+- Produkty są zarządzane przez `config/products.csv`, nie przez GUI.
+- Brak produktu w CSV nie usuwa go z SQLite; ukrycie wymaga `active=false`.
 - Teksty widoczne w GUI trzymamy w warstwie `controller/presentation`, obecnie w `controller/labels.py` i ViewState.
 
 ## Dokumentacja
