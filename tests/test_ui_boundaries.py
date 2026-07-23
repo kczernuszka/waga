@@ -1,8 +1,9 @@
 import ast
+import sqlite3
 from pathlib import Path
 
 from cash_assistant.main import build_development_controller
-from cash_assistant.ui.settings_screen import _parse_price_grosze
+from cash_assistant.ui.sales_screen import _product_icon_path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UI_PATH = PROJECT_ROOT / "src" / "cash_assistant" / "ui"
@@ -26,21 +27,49 @@ def test_ui_does_not_import_core_data_or_hardware() -> None:
         ), path
 
 
-def test_development_controller_seeds_products_when_database_is_empty(tmp_path: Path) -> None:
+def test_development_controller_synchronizes_active_products_from_csv(
+    tmp_path: Path,
+) -> None:
     controller = build_development_controller(tmp_path / "dev.sqlite3")
 
-    products = controller.list_products_for_settings()
+    products = controller.prepare_view_state().products
 
-    assert [product.name for product in products] == ["Ziemniaki", "Ogórki", "Jabłka", "Bułka"]
+    assert [product.name for product in products] == [
+        "Ziemniaki",
+        "Ogórki",
+        "Jabłka",
+        "Kukurydza",
+    ]
+    assert [product.icon_filename for product in products] == [
+        "ziemniaki.png",
+        "ogórki.png",
+        "jabłka.png",
+        "kukurydza.png",
+    ]
 
 
-def test_development_controller_does_not_duplicate_seed_products(tmp_path: Path) -> None:
+def test_development_controller_does_not_duplicate_synchronized_products(
+    tmp_path: Path,
+) -> None:
     database_path = tmp_path / "dev.sqlite3"
-    first_controller = build_development_controller(database_path)
-    second_controller = build_development_controller(database_path)
+    build_development_controller(database_path)
+    build_development_controller(database_path)
 
-    assert len(first_controller.list_products_for_settings()) == 4
-    assert len(second_controller.list_products_for_settings()) == 4
+    with sqlite3.connect(database_path) as connection:
+        products_count = connection.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+
+    assert products_count == 5
+
+
+def test_settings_screen_and_navigation_are_removed() -> None:
+    main_window_source = (UI_PATH / "main_window.py").read_text(encoding="utf-8")
+    sales_source = (UI_PATH / "sales_screen.py").read_text(encoding="utf-8")
+
+    assert not (UI_PATH / "settings_screen.py").exists()
+    assert "SettingsScreen" not in main_window_source
+    assert "show_settings_screen" not in main_window_source
+    assert "on_open_settings" not in sales_source
+    assert "_open_settings_button" not in sales_source
 
 
 def test_sales_screen_paid_input_accepts_comma_text() -> None:
@@ -51,26 +80,9 @@ def test_sales_screen_paid_input_accepts_comma_text() -> None:
     assert "Command.DECIMAL_SEPARATOR_TYPED" in source
 
 
-def test_settings_screen_uses_controller_dtos_for_product_editing() -> None:
-    source = (UI_PATH / "settings_screen.py").read_text(encoding="utf-8")
-
-    assert "list_products_for_settings()" in source
-    assert "prepare_product_edit_view_state(product_id)" in source
-    assert "save_product_from_input(product_input)" in source
-    assert "ProductEditInput(" in source
-    assert "QStackedWidget" in source
-    assert "self._page_stack.addWidget(self._products_page)" in source
-    assert "self._page_stack.addWidget(self._form_page)" in source
-    assert "self._show_form_page()" in source
-    assert "self._show_products_page()" in source
-
-
-def test_settings_screen_price_parser_accepts_comma_text() -> None:
-    assert _parse_price_grosze("0") == 0
-    assert _parse_price_grosze("1") == 100
-    assert _parse_price_grosze("1,20") == 120
-    assert _parse_price_grosze("0,05") == 5
-    assert _parse_price_grosze("1,2") == 120
+def test_product_icon_path_uses_configured_icon_or_fallback() -> None:
+    assert _product_icon_path("jabłka.png").name == "jabłka.png"
+    assert _product_icon_path("missing.png").name == "fallback.png"
 
 
 def test_history_screen_uses_controller_dtos_for_sales_history() -> None:
@@ -88,13 +100,12 @@ def test_main_window_installs_global_event_filter_for_sales_screen() -> None:
 
     assert "installEventFilter(self)" in source
     assert "def eventFilter(" in source
-    assert "QStackedWidget" in source
     assert "HistoryScreen" not in source
     assert "show_history_screen" not in source
-    assert "setCentralWidget(self._screen_stack)" in source
-    assert "setCentralWidget(self._sales_screen)" not in source
-    assert "setCentralWidget(self._settings_screen)" not in source
-    assert "self._screen_stack.currentWidget() is self._sales_screen" in source
+    assert "SettingsScreen" not in source
+    assert "QStackedWidget" not in source
+    assert "setCentralWidget(self._sales_screen)" in source
+    assert "self.centralWidget() is self._sales_screen" in source
     assert "handle_global_key_event(event)" in source
 
 

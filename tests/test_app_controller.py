@@ -2,24 +2,21 @@ import inspect
 import sqlite3
 from collections.abc import Iterator
 from datetime import datetime
+from itertools import count
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from cash_assistant.controller.app_controller import AppController, AppState
-from cash_assistant.controller.labels import PRODUCT_ACTIVE_TEXT, PRODUCT_INACTIVE_TEXT
 from cash_assistant.controller.view_state import (
     CartItemViewState,
-    ProductEditInput,
-    ProductEditViewState,
-    ProductListItemViewState,
     ProductViewState,
     SaleDetailsViewState,
     SaleItemViewState,
     SaleSummaryViewState,
-    UnitOptionViewState,
 )
+from cash_assistant.core.product import Product, UnitType
 from cash_assistant.data.database import connect, initialize_schema
 from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
@@ -27,6 +24,7 @@ from cash_assistant.hardware.mock_scale import MockScale
 
 POLAND_TIME_ZONE = ZoneInfo("Europe/Warsaw")
 CREATED_AT = datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE)
+PRODUCT_CODE_SEQUENCE = count(1)
 
 
 @pytest.fixture
@@ -66,17 +64,20 @@ def create_weighted_product(
     active: bool = True,
     sort_order: int = 0,
 ) -> int:
-    view_state = controller.save_product_from_input(
-        ProductEditInput(
-            product_id=None,
+    repository = controller._product_repository
+    assert repository is not None
+    product = repository.create_product(
+        Product(
+            id=None,
+            code=f"test-weighted-{next(PRODUCT_CODE_SEQUENCE)}",
             name=name,
-            unit_code="kg",
+            unit_type=UnitType.KG,
             price_grosze=price_grosze,
             active=active,
             sort_order=sort_order,
         )
     )
-    product_id = view_state.product_id
+    product_id = product.id
     assert product_id is not None
     return product_id
 
@@ -89,17 +90,20 @@ def create_piece_product(
     active: bool = True,
     sort_order: int = 0,
 ) -> int:
-    view_state = controller.save_product_from_input(
-        ProductEditInput(
-            product_id=None,
+    repository = controller._product_repository
+    assert repository is not None
+    product = repository.create_product(
+        Product(
+            id=None,
+            code=f"test-piece-{next(PRODUCT_CODE_SEQUENCE)}",
             name=name,
-            unit_code="piece",
+            unit_type=UnitType.PIECE,
             price_grosze=price_grosze,
             active=active,
             sort_order=sort_order,
         )
     )
-    product_id = view_state.product_id
+    product_id = product.id
     assert product_id is not None
     return product_id
 
@@ -153,6 +157,7 @@ def test_select_weighted_product_by_id_uses_current_scale_weight(
         price_text="6,99 zł/kg",
         unit_text="kg",
         button_text="Apples\n6,99 zł/kg",
+        icon_filename="fallback.png",
     )
     assert selected_view_state.current_weight_grams == 1_500
     assert selected_view_state.current_weight_text == "1,50 kg"
@@ -464,6 +469,7 @@ def test_sales_view_state_lists_active_products_for_sales(
             price_text="1,20 zł/szt.",
             unit_text="szt.",
             button_text="Roll\n1,20 zł/szt.",
+            icon_filename="fallback.png",
         ),
         ProductViewState(
             product_id=second_product_id,
@@ -471,174 +477,10 @@ def test_sales_view_state_lists_active_products_for_sales(
             price_text="6,99 zł/kg",
             unit_text="kg",
             button_text="Apples\n6,99 zł/kg",
+            icon_filename="fallback.png",
         ),
     )
     assert inactive_product_id not in [product.product_id for product in view_state.products]
-
-
-def test_settings_product_list_returns_view_states_not_products(
-    controller: AppController,
-) -> None:
-    first_product_id = create_piece_product(
-        controller,
-        name="Roll",
-        price_grosze=120,
-        sort_order=10,
-    )
-    second_product_id = create_weighted_product(
-        controller,
-        name="Apples",
-        price_grosze=699,
-        active=False,
-        sort_order=20,
-    )
-
-    products = controller.list_products_for_settings()
-
-    assert products == [
-        ProductListItemViewState(
-            product_id=first_product_id,
-            name="Roll",
-            unit_code="piece",
-            unit_text="szt.",
-            price_grosze=120,
-            price_text="1,20 zł/szt.",
-            active=True,
-            active_text=PRODUCT_ACTIVE_TEXT,
-            sort_order=10,
-        ),
-        ProductListItemViewState(
-            product_id=second_product_id,
-            name="Apples",
-            unit_code="kg",
-            unit_text="kg",
-            price_grosze=699,
-            price_text="6,99 zł/kg",
-            active=False,
-            active_text=PRODUCT_INACTIVE_TEXT,
-            sort_order=20,
-        ),
-    ]
-
-
-def test_settings_new_product_edit_view_state_uses_primitives(
-    controller: AppController,
-) -> None:
-    view_state = controller.prepare_product_edit_view_state()
-
-    assert view_state == ProductEditViewState(
-        product_id=None,
-        name="",
-        unit_code="kg",
-        price_grosze=0,
-        active=True,
-        sort_order=0,
-        unit_options=(
-            UnitOptionViewState(unit_code="kg", label="kg"),
-            UnitOptionViewState(unit_code="piece", label="szt."),
-        ),
-    )
-
-
-def test_settings_existing_product_edit_view_state_uses_primitives(
-    controller: AppController,
-) -> None:
-    product_id = create_piece_product(
-        controller,
-        name="Roll",
-        price_grosze=120,
-        active=False,
-        sort_order=10,
-    )
-
-    view_state = controller.prepare_product_edit_view_state(product_id)
-
-    assert view_state == ProductEditViewState(
-        product_id=product_id,
-        name="Roll",
-        unit_code="piece",
-        price_grosze=120,
-        active=False,
-        sort_order=10,
-        unit_options=(
-            UnitOptionViewState(unit_code="kg", label="kg"),
-            UnitOptionViewState(unit_code="piece", label="szt."),
-        ),
-    )
-
-
-def test_settings_save_product_input_maps_primitives_to_domain_model(
-    controller: AppController,
-) -> None:
-    created = controller.save_product_from_input(
-        ProductEditInput(
-            product_id=None,
-            name="Roll",
-            unit_code="piece",
-            price_grosze=120,
-            active=True,
-            sort_order=10,
-        )
-    )
-    assert created.product_id is not None
-    assert controller.prepare_product_edit_view_state(created.product_id) == created
-
-    updated = controller.save_product_from_input(
-        ProductEditInput(
-            product_id=created.product_id,
-            name="Apples",
-            unit_code="kg",
-            price_grosze=699,
-            active=False,
-            sort_order=5,
-        )
-    )
-
-    assert updated == ProductEditViewState(
-        product_id=created.product_id,
-        name="Apples",
-        unit_code="kg",
-        price_grosze=699,
-        active=False,
-        sort_order=5,
-        unit_options=(
-            UnitOptionViewState(unit_code="kg", label="kg"),
-            UnitOptionViewState(unit_code="piece", label="szt."),
-        ),
-    )
-    assert controller.prepare_product_edit_view_state(created.product_id) == updated
-
-
-def test_settings_save_product_input_rejects_empty_name(
-    controller: AppController,
-) -> None:
-    with pytest.raises(ValueError):
-        controller.save_product_from_input(
-            ProductEditInput(
-                product_id=None,
-                name="   ",
-                unit_code="piece",
-                price_grosze=120,
-                active=True,
-                sort_order=10,
-            )
-        )
-
-
-def test_settings_save_product_input_rejects_zero_price(
-    controller: AppController,
-) -> None:
-    with pytest.raises(ValueError):
-        controller.save_product_from_input(
-            ProductEditInput(
-                product_id=None,
-                name="Roll",
-                unit_code="piece",
-                price_grosze=0,
-                active=True,
-                sort_order=10,
-            )
-        )
 
 
 def test_history_sale_list_returns_summary_view_states(
@@ -744,7 +586,6 @@ def test_history_sale_details_returns_none_for_missing_sale(
 
 
 def test_navigation_methods_update_view_state(controller: AppController) -> None:
-    assert controller.open_settings().app_state is AppState.SETTINGS
     assert controller.open_history().app_state is AppState.HISTORY
     assert controller.cancel_current_operation().app_state is AppState.PRODUCT_SELECTION
 

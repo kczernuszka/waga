@@ -7,6 +7,7 @@ from cash_assistant.core.product import Product, UnitType
 def weighted_product() -> Product:
     return Product(
         id=1,
+        code="jablka",
         name="Jabłka",
         unit_type=UnitType.KG,
         price_grosze=699,
@@ -18,6 +19,7 @@ def weighted_product() -> Product:
 def piece_product() -> Product:
     return Product(
         id=2,
+        code="bulka",
         name="Bułka",
         unit_type=UnitType.PIECE,
         price_grosze=120,

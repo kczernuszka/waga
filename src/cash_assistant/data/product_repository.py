@@ -16,7 +16,8 @@ class ProductRepository:
     def list_active_products(self) -> list[Product]:
         rows = self._connection.execute(
             """
-            SELECT id, name, unit_type, price_grosze, active, sort_order
+            SELECT id, code, name, unit_type, price_grosze, active, sort_order,
+                   icon_filename
             FROM products
             WHERE active = 1
             ORDER BY sort_order ASC, id ASC
@@ -27,7 +28,8 @@ class ProductRepository:
     def list_all_products(self) -> list[Product]:
         rows = self._connection.execute(
             """
-            SELECT id, name, unit_type, price_grosze, active, sort_order
+            SELECT id, code, name, unit_type, price_grosze, active, sort_order,
+                   icon_filename
             FROM products
             ORDER BY sort_order ASC, id ASC
             """
@@ -37,7 +39,8 @@ class ProductRepository:
     def get_product(self, product_id: int) -> Product | None:
         row = self._connection.execute(
             """
-            SELECT id, name, unit_type, price_grosze, active, sort_order
+            SELECT id, code, name, unit_type, price_grosze, active, sort_order,
+                   icon_filename
             FROM products
             WHERE id = ?
             """,
@@ -47,19 +50,43 @@ class ProductRepository:
             return None
         return _row_to_product(row)
 
+    def get_product_by_code(self, code: str) -> Product | None:
+        row = self._connection.execute(
+            """
+            SELECT id, code, name, unit_type, price_grosze, active, sort_order,
+                   icon_filename
+            FROM products
+            WHERE code = ?
+            """,
+            (code,),
+        ).fetchone()
+        if row is None:
+            return None
+        return _row_to_product(row)
+
     def create_product(self, product: Product) -> Product:
         with transaction(self._connection):
             cursor = self._connection.execute(
                 """
-                INSERT INTO products (name, unit_type, price_grosze, active, sort_order)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO products (
+                    code,
+                    name,
+                    unit_type,
+                    price_grosze,
+                    active,
+                    sort_order,
+                    icon_filename
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    product.code,
                     product.name,
                     product.unit_type.value,
                     product.price_grosze,
                     int(product.active),
                     product.sort_order,
+                    product.icon_filename,
                 ),
             )
         product_id = cursor.lastrowid
@@ -70,6 +97,11 @@ class ProductRepository:
     def update_product(self, product: Product) -> Product:
         if product.id is None:
             raise ValueError("product id is required for update")
+        current_product = self.get_product(product.id)
+        if current_product is None:
+            raise ValueError(f"product with id {product.id} does not exist")
+        if product.code != current_product.code:
+            raise ValueError("product code cannot be changed")
 
         with transaction(self._connection):
             cursor = self._connection.execute(
@@ -79,7 +111,8 @@ class ProductRepository:
                     unit_type = ?,
                     price_grosze = ?,
                     active = ?,
-                    sort_order = ?
+                    sort_order = ?,
+                    icon_filename = ?
                 WHERE id = ?
                 """,
                 (
@@ -88,6 +121,7 @@ class ProductRepository:
                     product.price_grosze,
                     int(product.active),
                     product.sort_order,
+                    product.icon_filename,
                     product.id,
                 ),
             )
@@ -109,9 +143,11 @@ class ProductRepository:
 def _row_to_product(row: sqlite3.Row) -> Product:
     return Product(
         id=int(row["id"]),
+        code=str(row["code"]),
         name=str(row["name"]),
         unit_type=UnitType(str(row["unit_type"])),
         price_grosze=int(row["price_grosze"]),
         active=bool(row["active"]),
         sort_order=int(row["sort_order"]),
+        icon_filename=str(row["icon_filename"]),
     )

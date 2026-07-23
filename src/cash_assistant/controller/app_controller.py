@@ -8,16 +8,11 @@ from cash_assistant.controller.time import now_in_poland
 from cash_assistant.controller.view_state import (
     AppState,
     PaymentState,
-    ProductEditInput,
-    ProductEditViewState,
-    ProductListItemViewState,
     ProductViewState,
     SaleDetailsViewState,
     SaleSummaryViewState,
     ViewState,
     build_cart_item_view_state,
-    build_product_edit_view_state,
-    build_product_list_item_view_state,
     build_product_view_state,
     build_sale_details_view_state,
     build_sale_summary_view_state,
@@ -34,9 +29,6 @@ __all__ = [
     "AppController",
     "AppState",
     "PaymentState",
-    "ProductEditInput",
-    "ProductEditViewState",
-    "ProductListItemViewState",
     "SaleDetailsViewState",
     "SaleSummaryViewState",
     "ViewState",
@@ -60,45 +52,6 @@ class AppController:
         self._payment: PaymentState | None = None
         self._selected_piece_product_id: int | None = None
         self._selected_weighted_product_id: int | None = None
-
-    def list_products_for_settings(self) -> list[ProductListItemViewState]:
-        return [
-            build_product_list_item_view_state(product)
-            for product in self._require_product_repository().list_all_products()
-        ]
-
-    def prepare_product_edit_view_state(
-        self,
-        product_id: int | None = None,
-    ) -> ProductEditViewState:
-        if product_id is None:
-            return build_product_edit_view_state()
-
-        product = self._require_product_repository().get_product(product_id)
-        if product is None:
-            raise ValueError(f"product with id {product_id} does not exist")
-        return build_product_edit_view_state(product)
-
-    def save_product_from_input(
-        self,
-        product_input: ProductEditInput,
-    ) -> ProductEditViewState:
-        _validate_product_input(product_input)
-        product = Product(
-            id=product_input.product_id,
-            name=product_input.name.strip(),
-            unit_type=UnitType(product_input.unit_code),
-            price_grosze=product_input.price_grosze,
-            active=product_input.active,
-            sort_order=product_input.sort_order,
-        )
-
-        if product_input.product_id is None:
-            saved_product = self._require_product_repository().create_product(product)
-        else:
-            saved_product = self._require_product_repository().update_product(product)
-
-        return build_product_edit_view_state(saved_product)
 
     def select_product_by_id(self, product_id: int) -> ViewState:
         product = self._require_active_product(product_id)
@@ -156,10 +109,6 @@ class AppController:
         self._reset_payment()
         self._clear_selected_product()
         self._state = AppState.PRODUCT_SELECTION if self._cart.is_empty else AppState.CART_REVIEW
-        return self.prepare_view_state()
-
-    def open_settings(self) -> ViewState:
-        self._state = AppState.SETTINGS
         return self.prepare_view_state()
 
     def open_history(self) -> ViewState:
@@ -324,10 +273,3 @@ def _format_weight_grams(weight_grams: int) -> str:
     kilograms = kilograms_hundredths // 100
     hundredths_remainder = kilograms_hundredths % 100
     return f"{kilograms},{hundredths_remainder:02d} {UNIT_KG_TEXT}"
-
-
-def _validate_product_input(product_input: ProductEditInput) -> None:
-    if product_input.name.strip() == "":
-        raise ValueError("product name is required")
-    if product_input.price_grosze <= 0:
-        raise ValueError("product price must be greater than zero")

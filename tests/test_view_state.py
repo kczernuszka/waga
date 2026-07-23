@@ -17,9 +17,11 @@ def test_build_product_view_state_for_weighted_product() -> None:
     assert build_product_view_state(
         Product(
             id=1,
+            code="jablka",
             name="Jabłka",
             unit_type=UnitType.KG,
             price_grosze=699,
+            icon_filename="jabłka.png",
         )
     ) == ProductViewState(
         product_id=1,
@@ -27,6 +29,7 @@ def test_build_product_view_state_for_weighted_product() -> None:
         price_text="6,99 zł/kg",
         unit_text="kg",
         button_text="Jabłka\n6,99 zł/kg",
+        icon_filename="jabłka.png",
     )
 
 
@@ -34,9 +37,11 @@ def test_build_product_view_state_for_piece_product() -> None:
     assert build_product_view_state(
         Product(
             id=2,
+            code="bulka",
             name="Bułka",
             unit_type=UnitType.PIECE,
             price_grosze=120,
+            icon_filename="fallback.png",
         )
     ) == ProductViewState(
         product_id=2,
@@ -44,6 +49,7 @@ def test_build_product_view_state_for_piece_product() -> None:
         price_text="1,20 zł/szt.",
         unit_text="szt.",
         button_text="Bułka\n1,20 zł/szt.",
+        icon_filename="fallback.png",
     )
 
 

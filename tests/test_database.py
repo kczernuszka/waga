@@ -39,3 +39,45 @@ def test_connect_enables_foreign_keys_and_row_access() -> None:
 
     assert foreign_keys_enabled == 1
     assert row["name"] == "products"
+
+
+def test_initialize_schema_adds_product_csv_columns_and_unique_code() -> None:
+    connection = connect(":memory:")
+    initialize_schema(connection)
+
+    column_names = {
+        row["name"] for row in connection.execute("PRAGMA table_info(products)")
+    }
+    indexes = {
+        row["name"]: bool(row["unique"])
+        for row in connection.execute("PRAGMA index_list(products)")
+    }
+
+    assert {"code", "icon_filename"}.issubset(column_names)
+    assert indexes["products_code_unique"] is True
+
+
+def test_initialize_schema_migrates_existing_products_without_duplicates() -> None:
+    connection = connect(":memory:")
+    connection.executescript(
+        """
+        CREATE TABLE products (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            unit_type TEXT NOT NULL,
+            price_grosze INTEGER NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT INTO products (name, unit_type, price_grosze)
+        VALUES ('Jabłka', 'kg', 699);
+        """
+    )
+
+    initialize_schema(connection)
+
+    row = connection.execute(
+        "SELECT code, icon_filename FROM products WHERE id = 1"
+    ).fetchone()
+    assert row["code"] == "jablka"
+    assert row["icon_filename"] == "fallback.png"

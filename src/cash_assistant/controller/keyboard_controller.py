@@ -19,7 +19,6 @@ class Command(Enum):
     CLEAR_CART = "clear_cart"
     START_PAYMENT = "start_payment"
     SAVE_SALE = "save_sale"
-    OPEN_SETTINGS = "open_settings"
     OPEN_HISTORY = "open_history"
 
 
@@ -66,9 +65,6 @@ class KeyboardController:
             case Command.SAVE_SALE:
                 self._clear_input_buffers()
                 result = self._app_controller.save_sale()
-            case Command.OPEN_SETTINGS:
-                self._clear_input_buffers()
-                self._app_controller.open_settings()
             case Command.OPEN_HISTORY:
                 self._clear_input_buffers()
                 self._app_controller.open_history()

@@ -1,6 +1,7 @@
 import sqlite3
 from collections.abc import Iterator
 from datetime import datetime
+from itertools import count
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -8,7 +9,8 @@ import pytest
 
 from cash_assistant.controller.app_controller import AppController, AppState
 from cash_assistant.controller.keyboard_controller import Command, KeyboardController
-from cash_assistant.controller.view_state import ProductEditInput, SaleDetailsViewState, ViewState
+from cash_assistant.controller.view_state import SaleDetailsViewState, ViewState
+from cash_assistant.core.product import Product, UnitType
 from cash_assistant.data.database import connect, initialize_schema
 from cash_assistant.data.product_repository import ProductRepository
 from cash_assistant.data.sale_repository import SaleRepository
@@ -16,6 +18,7 @@ from cash_assistant.hardware.mock_scale import MockScale
 
 POLAND_TIME_ZONE = ZoneInfo("Europe/Warsaw")
 CREATED_AT = datetime(2026, 6, 23, 12, 0, tzinfo=POLAND_TIME_ZONE)
+PRODUCT_CODE_SEQUENCE = count(1)
 
 
 @pytest.fixture
@@ -60,16 +63,19 @@ def create_weighted_product(
     price_grosze: int = 699,
     sort_order: int = 0,
 ) -> int:
-    view_state = app_controller.save_product_from_input(
-        ProductEditInput(
-            product_id=None,
+    repository = app_controller._product_repository
+    assert repository is not None
+    product = repository.create_product(
+        Product(
+            id=None,
+            code=f"keyboard-weighted-{next(PRODUCT_CODE_SEQUENCE)}",
             name=name,
-            unit_code="kg",
+            unit_type=UnitType.KG,
             price_grosze=price_grosze,
             sort_order=sort_order,
         )
     )
-    product_id = view_state.product_id
+    product_id = product.id
     assert product_id is not None
     return product_id
 
@@ -81,16 +87,19 @@ def create_piece_product(
     price_grosze: int = 120,
     sort_order: int = 0,
 ) -> int:
-    view_state = app_controller.save_product_from_input(
-        ProductEditInput(
-            product_id=None,
+    repository = app_controller._product_repository
+    assert repository is not None
+    product = repository.create_product(
+        Product(
+            id=None,
+            code=f"keyboard-piece-{next(PRODUCT_CODE_SEQUENCE)}",
             name=name,
-            unit_code="piece",
+            unit_type=UnitType.PIECE,
             price_grosze=price_grosze,
             sort_order=sort_order,
         )
     )
-    product_id = view_state.product_id
+    product_id = product.id
     assert product_id is not None
     return product_id
 
@@ -344,13 +353,10 @@ def test_cancel_exits_current_input_without_clearing_cart(
     assert not view_state.is_cart_empty
 
 
-def test_open_settings_and_history_commands(
+def test_open_history_command(
     app_controller: AppController,
     keyboard_controller: KeyboardController,
 ) -> None:
-    keyboard_controller.handle(Command.OPEN_SETTINGS)
-    assert app_controller.prepare_view_state().app_state is AppState.SETTINGS
-
     keyboard_controller.handle(Command.OPEN_HISTORY)
     assert app_controller.prepare_view_state().app_state is AppState.HISTORY
 

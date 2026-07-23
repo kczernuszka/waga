@@ -1,9 +1,10 @@
 """Minimal PySide6 sales screen."""
 
 from collections.abc import Callable
+from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QIcon, QKeyEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGridLayout,
@@ -37,7 +38,6 @@ from cash_assistant.controller.labels import (
     SALES_CHANGE_LABEL,
     SALES_CLEAR_CART_BUTTON_TEXT,
     SALES_CONFIRM_BUTTON_TEXT,
-    SALES_OPEN_SETTINGS_BUTTON_TEXT,
     SALES_PAID_INPUT_LABEL,
     SALES_PAID_LABEL,
     SALES_PAYMENT_STATUS_ENTER_AMOUNT_TEXT,
@@ -54,16 +54,14 @@ from cash_assistant.controller.labels import (
 )
 from cash_assistant.controller.view_state import AppState, ProductViewState, ViewState
 
+PRODUCTS_ASSETS_PATH = Path(__file__).resolve().parents[3] / "assets" / "products"
+FALLBACK_ICON_FILENAME = "fallback.png"
+
 
 class SalesScreen(QWidget):
-    def __init__(
-        self,
-        controller: AppController,
-        on_open_settings: Callable[[], None] | None = None,
-    ) -> None:
+    def __init__(self, controller: AppController) -> None:
         super().__init__()
         self._controller = controller
-        self._on_open_settings = on_open_settings
         self._keyboard_controller = KeyboardController(controller)
         self._view_state = controller.prepare_view_state()
         self._product_buttons: list[QPushButton] = []
@@ -85,7 +83,6 @@ class SalesScreen(QWidget):
         self._remove_last_button = QPushButton(SALES_REMOVE_LAST_BUTTON_TEXT)
         self._clear_cart_button = QPushButton(SALES_CLEAR_CART_BUTTON_TEXT)
         self._start_payment_button = QPushButton(SALES_START_PAYMENT_BUTTON_TEXT)
-        self._open_settings_button = QPushButton(SALES_OPEN_SETTINGS_BUTTON_TEXT)
         self._confirm_selection_button = QPushButton(SALES_CONFIRM_BUTTON_TEXT)
         self._cancel_selection_button = QPushButton(SALES_CANCEL_BUTTON_TEXT)
         self._save_sale_button = QPushButton(SALES_SAVE_BUTTON_TEXT)
@@ -130,7 +127,6 @@ class SalesScreen(QWidget):
         actions_layout.addWidget(self._remove_last_button)
         actions_layout.addWidget(self._clear_cart_button)
         actions_layout.addWidget(self._start_payment_button)
-        actions_layout.addWidget(self._open_settings_button)
         root_layout.addLayout(actions_layout)
 
     def _build_products_group(self) -> QGroupBox:
@@ -157,7 +153,6 @@ class SalesScreen(QWidget):
         self._start_payment_button.clicked.connect(
             lambda: self._run_controller_action(self._controller.start_payment)
         )
-        self._open_settings_button.clicked.connect(self._open_settings)
         self._confirm_selection_button.clicked.connect(self._confirm_current_action)
         self._cancel_selection_button.clicked.connect(
             lambda: self._run_keyboard_command(Command.CANCEL)
@@ -186,6 +181,8 @@ class SalesScreen(QWidget):
         for index, product in enumerate(products):
             button = QPushButton(product.button_text)
             button.setMinimumHeight(72)
+            button.setIcon(QIcon(str(_product_icon_path(product.icon_filename))))
+            button.setIconSize(QSize(64, 64))
             button.clicked.connect(
                 lambda _checked=False, product_id=product.product_id: self._run_keyboard_command(
                     Command.SELECT_PRODUCT,
@@ -316,10 +313,6 @@ class SalesScreen(QWidget):
         QMessageBox.information(self, INFORMATION_DIALOG_TITLE, SALE_SAVED_TEXT)
         self.refresh()
 
-    def _open_settings(self) -> None:
-        if self._on_open_settings is not None:
-            self._on_open_settings()
-
     def _run_keyboard_command(self, command: Command, payload: object | None = None) -> None:
         try:
             self._keyboard_controller.handle(command, payload)
@@ -430,6 +423,13 @@ def _selected_product_text(view_state: ViewState) -> str:
     if view_state.selected_product is None:
         return ""
     return view_state.selected_product.name
+
+
+def _product_icon_path(icon_filename: str) -> Path:
+    candidate = PRODUCTS_ASSETS_PATH / Path(icon_filename).name
+    if candidate.is_file():
+        return candidate
+    return PRODUCTS_ASSETS_PATH / FALLBACK_ICON_FILENAME
 
 
 def _command_from_key_event(event: QKeyEvent) -> tuple[Command, object | None] | None:

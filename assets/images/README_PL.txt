@@ -1,7 +1,10 @@
 IKONY PRODUKTÓW — NOTO EMOJI
 
-Zawartość: 37 przezroczystych plików PNG 256×256.
+Zawartość: 36 ikon produktów w ../products/ oraz ikona ustawień w png/.
 Każdy widoczny obiekt został dopasowany do wspólnego pola 216×216, co daje co najmniej 20 px marginesu z każdej strony.
+
+Plik ../products/fallback.png jest neutralną grafiką aplikacji i nie pochodzi
+z Noto Emoji.
 
 Źródło: googlefonts/noto-emoji, katalog svg
 Repozytorium: https://github.com/googlefonts/noto-emoji

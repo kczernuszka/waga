@@ -1,0 +1,6 @@
+code,name,unit,price_grosze,active,sort_order,icon_filename
+ziemniaki,Ziemniaki,kg,299,true,10,ziemniaki.png
+ogorki,Ogórki,kg,799,true,20,ogórki.png
+jablka,Jabłka,kg,499,true,30,jabłka.png
+bulka,Bułka,szt,120,false,40,fallback.png
+kukurydza,Kukurydza,szt,120,true,50,kukurydza.png
